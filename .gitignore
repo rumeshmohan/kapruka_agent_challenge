@@ -1,0 +1,17 @@
+# --- API Safety & Credentials ---
+.env
+.env.local
+.env.*.local
+
+# --- Python & Environment ---
+__pycache__/
+*.py[cod]
+*.pyc
+*$py.class
+.python-version
+.venv/
+env/
+venv/
+build/
+dist/
+.pytest_cache/

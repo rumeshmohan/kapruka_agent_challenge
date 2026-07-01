@@ -1,0 +1,26 @@
+# config/params.yaml
+# Parameter Configuration for Kapruka Concierge
+
+provider:
+  default: gemini
+  tier: general  # Points to the 'general' model mapping in model.yaml
+
+llm:
+  temperature: 0.2
+  max_tokens: 512  # Increased from 256 to give localized trilingual phrasing room to generate
+  top_p: 0.9
+
+# ─── Live Model Context Protocol (MCP) Gateway ─────────────────────────────
+mcp:
+  url: "https://mcp.kapruka.com/mcp"
+  timeout: 15
+
+# ─── Paths ─────────────────────────────────────────────────────────────────
+paths:
+  data_dir: "data"
+  profiles_file: "data/profiles.json"
+
+# ─── System Output ─────────────────────────────────────────────────────────
+output:
+  timezone: "Asia/Colombo"
+  disclaimer: "This is an active live-MCP production prototype for Kapruka."

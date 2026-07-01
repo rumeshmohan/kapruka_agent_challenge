@@ -1,0 +1,22 @@
+{
+  "CUS_001": {
+    "customer_name": "Kamal",
+    "recipients": {
+      "unknown": {
+        "allergies": [],
+        "preferences": [
+          "ice cream",
+          "chocolate cake"
+        ]
+      },
+      "wife": {
+        "allergies": [
+          "peanuts"
+        ],
+        "preferences": [
+          "chocolate box"
+        ]
+      }
+    }
+  }
+}
