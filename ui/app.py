@@ -1,5 +1,7 @@
 import sys
 import json
+import io
+import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -11,6 +13,31 @@ from main import run_agent_pipeline
 from memory.session_buffer import SessionBuffer
 from utils.config import get_config
 
+# ==============================================================================
+# --- 🛠️ REAL-TIME SYSTEM TRACE TERMINAL CAPTURE ENGINE ---
+# ==============================================================================
+if "log_stream" not in st.session_state:
+    st.session_state.log_stream = io.StringIO()
+
+# Configure the root logging layout to pipe data into our session stream
+logging.basicConfig(level=logging.INFO, force=True)
+root_logger = logging.getLogger()
+
+# Prevent duplicate handlers from stacking on redraws
+for h in root_logger.handlers[:]:
+    root_logger.removeHandler(h)
+
+string_handler = logging.StreamHandler(st.session_state.log_stream)
+string_handler.setFormatter(logging.Formatter("⏰ %H:%M:%S | [%(levelname)s] ➔ %(message)s"))
+root_logger.addHandler(string_handler)
+
+# Inject an initial boot trace log line 
+if not st.session_state.log_stream.getvalue():
+    root_logger.info("⚡ Kapi Smart Agent Multi-Agent Kernel Initialized successfully.")
+
+# ==============================================================================
+# --- PAGE CONFIGURATION ---
+# ==============================================================================
 st.set_page_config(
     page_title="Kapi - Kapruka Smart Agent",
     page_icon="🛍️",
@@ -30,7 +57,6 @@ if "order_history" not in st.session_state:
 # ==============================================================================
 # --- SIDEBAR INTERFACE ---
 # ==============================================================================
-
 st.sidebar.title("👤 Family Profile Dashboard")
 config = get_config()
 PROFILES_FILE = Path(config.get("paths.profiles_file", "data/profiles.json"))
@@ -145,7 +171,7 @@ else:
         st.rerun()
 
 # ==============================================================================
-# --- MAIN CHAT INTERFACE ---
+# --- MAIN HEADER INTERFACE ---
 # ==============================================================================
 components.html(
     """
@@ -202,8 +228,8 @@ components.html(
         }
         @keyframes kapi-tick-in {
             0%   { transform: translateY(120%); opacity: 0; }
-            12%  { transform: translateY(0%);   opacity: 1; }
-            70%  { transform: translateY(0%);   opacity: 1; }
+            12%  { transform: translateY(0%); opacity: 1; }
+            70%  { transform: translateY(0%); opacity: 1; }
             85%  { transform: translateY(-120%); opacity: 0; }
             100% { transform: translateY(-120%); opacity: 0; }
         }
@@ -244,7 +270,6 @@ components.html(
 )
 st.caption("⚡ Live MCP Smart Assistant | English • Tamil • Sinhala • Singlish • Tanglish")
 
-
 if not st.session_state.chat_history:
     st.info(
         "👋 **Just type or tap the mic below to ask for anything** — e.g. "
@@ -257,7 +282,7 @@ if not st.session_state.chat_history:
 def render_product_card(prod, idx, key_prefix):
     st.image(
         prod.get("image_url", "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&q=80"),
-        width='stretch'
+        width=None
     )
     st.markdown(f"**{prod.get('name')}**")
     st.caption(f"LKR {prod.get('price', 0):,}")
@@ -275,6 +300,7 @@ def render_product_card(prod, idx, key_prefix):
             st.success("Added!")
             st.rerun()
 
+# Render chat messages from history
 for chat_idx, chat in enumerate(st.session_state.chat_history):
     with st.chat_message(chat["role"]):
         st.markdown(chat["content"])
@@ -284,6 +310,7 @@ for chat_idx, chat in enumerate(st.session_state.chat_history):
                 with cols[idx]:
                     render_product_card(prod, idx, key_prefix=f"hist_{chat_idx}")
 
+# Chat execution bar
 user_query = st.chat_input("Ask Kapi...")
 
 # --- TRILINGUAL AND DIALECT MIX AUDIO ENGINE ---
@@ -291,7 +318,6 @@ voice_html = """
 <script>
 (function() {
     const doc = window.parent.document;
-
     const MIC_SVG = `
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z"
@@ -300,11 +326,9 @@ voice_html = """
                   stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
     `;
-
     function mount() {
         const submitBtn = doc.querySelector('button[data-testid="stChatInputSubmitButton"]');
         if (!submitBtn || !submitBtn.parentElement) return false;
-
         const existing = doc.getElementById('bar-mic-btn');
         if (existing && existing.nextElementSibling === submitBtn) return true;
         if (existing) existing.remove();
@@ -351,18 +375,12 @@ voice_html = """
             }
         `;
         doc.head.appendChild(style);
-
         const micBtn = doc.createElement('button');
         micBtn.id = 'bar-mic-btn';
         micBtn.type = 'button';
-        micBtn.title = 'Tap to speak. Use the language tag to switch between English, Sinhala, Tamil, Singlish, Tanglish';
+        micBtn.title = 'Tap to speak. Use language tag to switch between variations';
         micBtn.innerHTML = MIC_SVG;
-
-        // Only these 5 varieties are supported. Each maps to the closest
-        // BCP-47 tag the browser's SpeechRecognition engine can use.
-        // "Singlish" (Sinhala+English) and "Tanglish" (Tamil+English) have no
-        // dedicated recognition locale, so they're routed through the base
-        // English engine, which handles that kind of code-mixed speech best.
+        
         const LANG_MODES = [
             { key: 'en',       label: 'English',  tag: 'en-US' },
             { key: 'si',       label: 'Sinhala',  tag: 'si-LK' },
@@ -378,22 +396,14 @@ voice_html = """
         langTag.title = 'Click to change recognition language';
         langTag.innerText = LANG_MODES[modeIdx].label;
         langTag.style.cssText = `
-            font-size: 11px;
-            color: #888;
-            margin-right: 4px;
-            font-weight: 600;
-            letter-spacing: 0.2px;
-            border: none;
-            background: rgba(136,136,136,0.12);
-            border-radius: 10px;
-            padding: 3px 9px;
-            cursor: pointer;
+            font-size: 11px; color: #888; margin-right: 4px; font-weight: 600;
+            letter-spacing: 0.2px; border: none; background: rgba(136,136,136,0.12);
+            border-radius: 10px; padding: 3px 9px; cursor: pointer;
         `;
         langTag.addEventListener('click', () => {
             modeIdx = (modeIdx + 1) % LANG_MODES.length;
             langTag.innerText = LANG_MODES[modeIdx].label;
         });
-
         const indicatorLabel = doc.createElement('span');
         indicatorLabel.id = 'voice-indicator-label';
         indicatorLabel.innerText = '🎙️';
@@ -401,7 +411,6 @@ voice_html = """
         submitBtn.parentElement.insertBefore(langTag, submitBtn);
         submitBtn.parentElement.insertBefore(indicatorLabel, submitBtn);
         submitBtn.parentElement.insertBefore(micBtn, submitBtn);
-
         wireUp(micBtn, indicatorLabel, langTag, LANG_MODES, () => modeIdx);
         return true;
     }
@@ -416,16 +425,12 @@ voice_html = """
         }
 
         let isRecording = false;
-
         micBtn.addEventListener('click', () => {
             if (isRecording) return;
-
             const recognition = new SpeechRecognition();
             recognition.continuous = false;
             recognition.interimResults = false;
 
-            // Restrict to a single, valid BCP-47 tag for the currently
-            // selected mode (English / Sinhala / Tamil / Singlish / Tanglish).
             const mode = LANG_MODES[getModeIdx()];
             recognition.lang = mode.tag;
 
@@ -440,29 +445,24 @@ voice_html = """
                 const transcript = event.results[0][0].transcript;
                 const textarea = doc.querySelector('textarea[data-testid="stChatInputTextArea"]');
                 if (textarea) {
-                    const setter = Object.getOwnPropertyDescriptor(
-                        window.parent.HTMLTextAreaElement.prototype, 'value'
-                    ).set;
+                    const setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, 'value').set;
                     setter.call(textarea, transcript);
                     textarea.dispatchEvent(new Event('input', { bubbles: true }));
                     textarea.focus();
                 }
             };
-
             recognition.onerror = () => {
                 isRecording = false;
                 micBtn.classList.remove('recording');
                 indicatorLabel.innerText = '🎙️';
                 indicatorLabel.style.color = '#888';
             };
-
             recognition.onend = () => {
                 isRecording = false;
                 micBtn.classList.remove('recording');
                 indicatorLabel.innerText = '🎙️';
                 indicatorLabel.style.color = '#888';
             };
-
             recognition.start();
         });
     }
@@ -476,7 +476,6 @@ voice_html = """
 })();
 </script>
 """
-
 components.html(voice_html, height=0)
 
 active_query = user_query
@@ -496,26 +495,23 @@ if active_query:
         with st.chat_message("user"):
             st.markdown(f"🔍 *Executing Sidebar Override Query:* **{active_query}**")
 
+    # Log the prompt transmission step
+    root_logger.info(f"🚀 Main UI Thread packaging state payload context for user action.")
+
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             pipeline_kwargs = dict(
                 query=active_query,
                 session_memory=st.session_state.memory,
                 cart_items=st.session_state.cart,
-                occasion=occasion if occasion != "None" else None,
-                delivery_date=delivery_date.isoformat(),
             )
             try:
                 response = run_agent_pipeline(**pipeline_kwargs)
-            except TypeError:
-                response = run_agent_pipeline(
-                    query=active_query,
-                    session_memory=st.session_state.memory,
-                    cart_items=st.session_state.cart,
-                )
+            except Exception as e:
+                root_logger.error(f"❌ Core Pipeline Exception caught: {e}")
+                response = {"text": "An execution error occurred.", "products": []}
             
             raw_products = response.get("products", [])
-            
             filtered_products = [
                 p for p in raw_products 
                 if price_range[0] <= float(p.get("price", 0)) <= price_range[1]
@@ -525,18 +521,16 @@ if active_query:
                 filtered_products.sort(key=lambda x: float(x.get("price", 0)))
             elif sort_order == "Price: High to Low":
                 filtered_products.sort(key=lambda x: float(x.get("price", 0)), reverse=True)
-                
+                 
             st.markdown(response["text"])
 
             if raw_products and not filtered_products:
                 st.info(
                     f"Found {len(raw_products)} matching product(s), but none fall within "
-                    f"your LKR {price_range[0]:,}–{price_range[1]:,} budget filter. "
-                    "Try widening the Budget Threshold in the sidebar."
+                    f"your LKR {price_range[0]:,}–{price_range[1]:,} budget filter."
                 )
 
             chat_entry = {"role": "assistant", "content": response["text"], "products": []}
-            
             if filtered_products:
                 chat_entry["products"] = filtered_products
                 cols = st.columns(min(len(filtered_products), 4))
@@ -547,3 +541,14 @@ if active_query:
             
             st.session_state.chat_history.append(chat_entry)
             st.rerun()
+
+# ==============================================================================
+# --- 🛠️ DYNAMIC STREAMING AGENT TRACE LOGGER PANEL ---
+# ==============================================================================
+st.markdown("---")
+with st.expander("🛠️ System Multi-Agent Terminal Trace Logs", expanded=True):
+    current_logs = st.session_state.log_stream.getvalue()
+    if current_logs:
+        st.code(current_logs, language="bash")
+    else:
+        st.info("Waiting for agent activity triggers...")
