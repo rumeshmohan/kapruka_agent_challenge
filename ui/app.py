@@ -27,8 +27,9 @@ root_logger = logging.getLogger()
 for h in root_logger.handlers[:]:
     root_logger.removeHandler(h)
 
+# FIXED: Added style='{' to cleanly format time brackets without ValueError crashes
 string_handler = logging.StreamHandler(st.session_state.log_stream)
-string_handler.setFormatter(logging.Formatter("⏰ %H:%M:%S | [%(levelname)s] ➔ %(message)s"))
+string_handler.setFormatter(logging.Formatter("⏰ {asctime} | [{levelname}] ➔ {message}", style='{'))
 root_logger.addHandler(string_handler)
 
 # Inject an initial boot trace log line 
@@ -495,7 +496,7 @@ if active_query:
         with st.chat_message("user"):
             st.markdown(f"🔍 *Executing Sidebar Override Query:* **{active_query}**")
 
-    # Log the prompt transmission step
+    # Trace active session context packaging
     root_logger.info(f"🚀 Main UI Thread packaging state payload context for user action.")
 
     with st.chat_message("assistant"):
