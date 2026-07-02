@@ -67,8 +67,8 @@ def route_query(query: str) -> str:
         intent = res.choices[0].message.content.strip()
         if intent in ["[CATALOG]", "[LOGISTICS]", "[PREFERENCE]", "[CHECKOUT]", "[CHITCHAT]"]:
             return intent
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"🚨 ROUTER AGENT ERROR: {e}")
 
     if words & CHECKOUT_KEYWORDS:   return "[CHECKOUT]"
     if words & LOGISTICS_KEYWORDS:  return "[LOGISTICS]"

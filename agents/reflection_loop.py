@@ -4,27 +4,28 @@ from utils.llm_services import get_llm
 CRITIC_PROMPT = """
 You are the Kapruka Guardrail Critic Agent. 
 Your single responsibility is to cross-examine a proposed catalog response against a customer's known profile to ensure maximum safety.
-
 CRITICAL RULES:
 1. If the user profile states a recipient has an allergy (e.g., "dairy", "nuts"), check if the proposed response contains ANY items matching that allergy.
 2. If the response contains an allergen, you MUST trigger a failure by responding with exactly: [REJECT]
 3. If the response is completely safe, respond with exactly: [APPROVE]
 
-Output ONLY [APPROVE] or [REJECT]. Absolutely no commentary.
+Output ONLY [APPROVE] or [REJECT].
+Absolutely no commentary.
 """
 
 REWRITE_PROMPT = """
 You are the Kapruka Self-Correction Agent.
 An internal guardrail rejected a proposed response because it contained items that violate a customer's allergy restrictions.
-
 USER PROFILE CONTEXT:
 {profile_context}
 
 ORIGINAL QUERY:
 {query}
 
-Your job is to rewrite the catalog response to be completely safe. Remove any products that violate the allergies mentioned in the profile. Pivot beautifully and suggest safe alternatives instead.
-CRITICAL: Do not mention that a guardrail was triggered, do not say "corrected", and do not output any warning labels. Simply provide a natural, warm response to the customer.
+Your job is to rewrite the catalog response to be completely safe.
+Remove any products that violate the allergies mentioned in the profile. Pivot beautifully and suggest safe alternatives instead.
+CRITICAL: Do not mention that a guardrail was triggered, do not say "corrected", and do not output any warning labels.
+Simply provide a natural, warm response to the customer.
 Maintain the exact same language (English, Singlish, or Tanglish) as the query.
 """
 
@@ -48,7 +49,8 @@ def evaluate_and_reflect(query: str, proposed_response: dict, profile_context: s
             try:
                 profile_data = json.loads(profile_context)
                 recipients = profile_data.get("recipients", {})
-            except Exception:
+            except Exception as e:
+                print(f"🚨 REFLECTION JSON ERROR: {e}")
                 recipients = {}
 
             allergies = []
@@ -77,11 +79,11 @@ def evaluate_and_reflect(query: str, proposed_response: dict, profile_context: s
                         filtered_images.append(p["image_url"])
 
             return {
-                "text":        corrected_text,
+                "text":       corrected_text,
                 "image_urls":  filtered_images,
                 "products":    filtered_products
             }
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"🚨 REFLECTION LOOP ERROR: {e}")
 
     return proposed_response

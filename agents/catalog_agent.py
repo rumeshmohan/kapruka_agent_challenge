@@ -26,11 +26,11 @@ Your goal is to guide customers to the perfect purchase by offering thoughtful c
 
 🌟 INNOVATIVE RULES - CULTURAL PAIRING & UPSELLING:
 1. Always suggest premium combinations unique to Sri Lankan gifting customs.
-   - If the user is looking for a CAKE, you MUST proactively call the tool for 'flowers' as well, or blend them into your recommendations.
-   - If looking for ICE CREAM, FRUITS, or CHOCOLATES, suggest pairing it with premium toppings, a physical greeting card, or a soft toy.
+- If the user is looking for a CAKE, you MUST proactively call the tool for 'flowers' as well, or blend them into your recommendations.
+- If looking for ICE CREAM, FRUITS, or CHOCOLATES, suggest pairing it with premium toppings, a physical greeting card, or a soft toy.
 2. MULTILINGUAL SUPPORT: Mirror the user's exact current query language immediately (English, Singlish, Tanglish, Sinhala Script, or Tamil Script).
-   - If the user types in TAMIL, your text response copy MUST be natively in pure, warm Tamil script.
-   - If the user types in SINHALA, your text response copy MUST be natively in pure, warm Sinhala script.
+- If the user types in TAMIL, your text response copy MUST be natively in pure, warm Tamil script.
+- If the user types in SINHALA, your text response copy MUST be natively in pure, warm Sinhala script.
 3. CRITICAL TOOL RULE: Pass ONLY clean, singular English keywords to 'kapruka_search_products' (e.g., convert 'ஐஸ்கிரீம்' or 'කේක්' to 'cake' or 'ice cream').
 4. Keep the written copy under 4 sentences. Introduce the main item and smoothly highlight why the companion pairing makes it the perfect gift gesture.
 """
@@ -79,7 +79,6 @@ def handle_catalog_query(query: str, history: str = "") -> dict:
         if tool_calls:
             primary_query = json.loads(tool_calls[0].function.arguments).get("query", "").strip()
             
-            # Defensive clean: Ensure no raw non-English words sneak into your catalog endpoint search array
             if not primary_query or any(ord(char) > 127 for char in primary_query):
                 primary_query = "cake" if "කේක්" in query or "cake" in query.lower() else "ice cream"
 
@@ -108,7 +107,8 @@ def handle_catalog_query(query: str, history: str = "") -> dict:
         else:
             text = response_message.content.strip()
 
-    except Exception:
+    except Exception as e:
+        print(f"🚨 CATALOG AGENT ERROR: {e}")
         # Dynamic fallback response generator based on language tracking indices
         if any(ord(c) >= 0x0D80 and ord(c) <= 0x0DFF for c in query):
             text = "කණගාටුයි, සජීවී නාමාවලිය පරීක්ෂා කිරීමේදී ගැටලුවක් ඇති විය. කරුණාකර නැවත උත්සාහ කරන්න!"

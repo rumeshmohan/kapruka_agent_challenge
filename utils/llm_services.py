@@ -30,7 +30,9 @@ class LLMProvider:
             base_url = None
             api_key = get_api_key("openai")
 
-        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=120)
+        # Lowered timeout to 45s to beat Railway's 100s proxy timeout
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=45)
+        
         raw_model = self.config.get_model(provider, tier)
         self.model = raw_model.split("/")[-1] if "/" in raw_model else raw_model
 
@@ -48,6 +50,7 @@ class LLMProvider:
                 max_tokens=self.config.get("llm.max_tokens", 1024),
             )
             return response.choices[0].message.content
+            
         except Exception as e:
             logger.error(f"❌ API Error on model {self.model}: {e}")
             raise

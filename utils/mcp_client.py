@@ -43,7 +43,8 @@ def get_mcp_session():
         headers["Mcp-Session-Id"] = session_id
         notify_payload = {"jsonrpc": "2.0", "method": "notifications/initialized"}
         requests.post(MCP_URL, json=notify_payload, headers=headers, timeout=15)
-    except Exception:
+    except Exception as e:
+        print(f"🚨 MCP SESSION ERROR: {e}")
         session_id = str(uuid.uuid4())
         st.session_state.mcp_session_id = session_id
         
@@ -100,9 +101,11 @@ def execute_remote_tool(tool_name: str, arguments: dict) -> list:
                             if isinstance(parsed, dict) and "products" in parsed: return parsed["products"]
                         except json.JSONDecodeError:
                             parsed_products = []
-                            pattern = r'\*\*\d+\.\s+(.*?)\*\*[\s\S]*?ID:\s+`([A-Z0-9]+)`[\s\S]*?LKR\s+([\d,]+)[\s\S]*?\[View product\]\((https?://[^\)]+)\)'
-                            
-                            for match in re.finditer(pattern, text_val, re.IGNORECASE):
+                            pattern = re.compile(
+                                r'\*\*\d+\.\s+(.*?)\*\*.*?ID:\s+`([A-Z0-9]+)`.*?LKR\s+([\d,]+).*?\[View product\]\((https?://[^\)]+)\)', 
+                                re.IGNORECASE | re.DOTALL
+                            )
+                            for match in pattern.finditer(text_val):
                                 if len(parsed_products) >= 5:
                                     break
                                 name = match.group(1).strip()
@@ -133,6 +136,6 @@ def execute_remote_tool(tool_name: str, arguments: dict) -> list:
                                 return parsed_products
             if isinstance(result_data, list): return result_data
             if isinstance(result_data, dict) and "products" in result_data: return result_data["products"]
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"🚨 MCP CLIENT ERROR: {e}")
     return []
