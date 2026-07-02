@@ -8,14 +8,11 @@ from datetime import datetime, timedelta
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
-import streamlit.components.v1 as components
 from main import run_agent_pipeline
 from memory.session_buffer import SessionBuffer
 from utils.config import get_config
 
-# ==============================================================================
-# --- PAGE CONFIGURATION (MUST BE FIRST) ---
-# ==============================================================================
+# Page Configuration (Must be first)
 st.set_page_config(
     page_title="Kapi - Kapruka Smart Agent",
     page_icon="🛍️",
@@ -23,20 +20,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ==============================================================================
-# --- 🛡️ SAFE PRICE HELPER ---
-# ==============================================================================
 def safe_price(p: dict) -> float:
-    """Safely coerce a product's price field to a float."""
     try:
         raw = str(p.get("price", 0)).replace(",", "").replace("LKR", "").replace("Rs.", "").strip()
         return float(raw) if raw else 0.0
     except (ValueError, TypeError):
         return 0.0
 
-# ==============================================================================
-# --- 🛠️ REAL-TIME SYSTEM TRACE TERMINAL CAPTURE ENGINE ---
-# ==============================================================================
+# System Trace Terminal Capture
 if "log_stream" not in st.session_state:
     st.session_state.log_stream = io.StringIO()
 
@@ -46,12 +37,10 @@ root_logger = logging.getLogger()
 for h in root_logger.handlers[:]:
     root_logger.removeHandler(h)
 
-# 1. Standard Console Handler (For Railway Logs to capture)
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(logging.Formatter("⏰ {asctime} | [{levelname}] ➔ {message}", style='{'))
 root_logger.addHandler(console_handler)
 
-# 2. Session State Handler (For Streamlit UI Terminal Expander)
 string_handler = logging.StreamHandler(st.session_state.log_stream)
 string_handler.setFormatter(logging.Formatter("⏰ {asctime} | [{levelname}] ➔ {message}", style='{'))
 root_logger.addHandler(string_handler)
@@ -59,9 +48,7 @@ root_logger.addHandler(string_handler)
 if not st.session_state.log_stream.getvalue():
     root_logger.info("⚡ Kapi Smart Agent Multi-Agent Kernel Initialized successfully.")
 
-# ==============================================================================
-# --- SESSION STATE INITS ---
-# ==============================================================================
+# Session State Inits
 if "memory" not in st.session_state:
     st.session_state.memory = SessionBuffer(max_pairs=5)
 if "chat_history" not in st.session_state:
@@ -71,9 +58,7 @@ if "cart" not in st.session_state:
 if "order_history" not in st.session_state:
     st.session_state.order_history = []
 
-# ==============================================================================
-# --- SIDEBAR INTERFACE ---
-# ==============================================================================
+# Sidebar Interface
 st.sidebar.title("👤 Family Profile Dashboard")
 config = get_config()
 PROFILES_FILE = Path(config.get("paths.profiles_file", "data/profiles.json"))
@@ -104,34 +89,16 @@ else:
     st.sidebar.info("No active profile data found.")
 
 st.sidebar.markdown("---")
-
 st.sidebar.title("🔍 Search & Filters")
-st.sidebar.caption("Optional — just type in the chat box if you'd rather skip this.")
 
-keyword_override = st.sidebar.text_input(
-    label="Keyword",
-    value="",
-    placeholder="e.g. chocolate, lilies, fruits",
-    help="What are you looking for?"
-)
+keyword_override = st.sidebar.text_input(label="Keyword", value="", placeholder="e.g. chocolate, lilies, fruits")
 occasion = st.sidebar.selectbox(
     label="Occasion",
     options=["None", "Anniversary Gift", "Birthday Celebration", "Christmas Hamper", "Ramadan/Eid Sweets", "Mother's Day", "Valentine Surprise"],
-    index=0,
-    help="Get gift ideas suited to a specific occasion."
-)
-price_range = st.sidebar.slider(
-    label="Budget (LKR)",
-    min_value=0,
-    max_value=50000,
-    value=(0, 25000),
-    step=500
-)
-sort_order = st.sidebar.selectbox(
-    label="Sort By",
-    options=["Best Match", "Price: Low to High", "Price: High to Low"],
     index=0
 )
+price_range = st.sidebar.slider(label="Budget (LKR)", min_value=0, max_value=50000, value=(0, 25000), step=500)
+sort_order = st.sidebar.selectbox(label="Sort By", options=["Best Match", "Price: Low to High", "Price: High to Low"], index=0)
 delivery_date = st.sidebar.date_input(
     label="Delivery Date",
     value=datetime.now() + timedelta(days=1),
@@ -139,12 +106,9 @@ delivery_date = st.sidebar.date_input(
     max_value=datetime.now() + timedelta(days=30)
 )
 
-sidebar_search_clicked = st.sidebar.button(
-    "🔎 Search", type="primary", use_container_width=True
-)
+sidebar_search_clicked = st.sidebar.button("🔎 Search", type="primary", use_container_width=True)
 
 st.sidebar.markdown("---")
-
 st.sidebar.title("🛒 Active Shopping Cart")
 if not st.session_state.cart:
     st.sidebar.info("Your shopping cart is empty.")
@@ -155,9 +119,7 @@ else:
             st.markdown(f"**{item.get('name', 'Product')}**")
             st.caption(f"Price: LKR {safe_price(item):,.2f}")
             if st.button("Remove", key=f"remove_cart_{item_id}"):
-                st.session_state.cart = [
-                    c for c in st.session_state.cart if c.get("id", idx) != item_id
-                ]
+                st.session_state.cart = [c for c in st.session_state.cart if c.get("id", idx) != item_id]
                 st.rerun()
 
     total_price = sum(safe_price(item) for item in st.session_state.cart)
@@ -176,7 +138,6 @@ else:
             st.rerun()
 
 st.sidebar.markdown("---")
-
 st.sidebar.title("📜 Order History Vault")
 if not st.session_state.order_history:
     st.sidebar.caption("No historical invoices processed in this session.")
@@ -187,62 +148,18 @@ else:
         st.session_state.order_history = []
         st.rerun()
 
-# ==============================================================================
-# --- MAIN HEADER INTERFACE ---
-# ==============================================================================
-components.html(
+# Main Header Interface
+st.html(
     """
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@700&family=Noto+Sans+Tamil:wght@700&family=Noto+Sans+Sinhala:wght@700&display=swap" rel="stylesheet">
     <style>
-        html, body {
-            background: transparent;
-            margin: 0;
-            padding: 0;
-        }
-        .kapi-title-wrap {
-            font-family: "Source Sans Pro", "Noto Sans", "Iskoola Pota", "Sinhala Sangam MN", "Noto Sans Sinhala", "Latha", "Tamil Sangam MN", "Noto Sans Tamil", sans-serif;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            height: 3.2rem;
-            padding-top: 4px;
-            margin-bottom: 2px;
-        }
-        .kapi-title-wrap .fixed-part {
-            font-size: 2.1rem;
-            font-weight: 700;
-            color: #4A90E2;
-            line-height: 3.2rem;
-        }
-        .kapi-rotator {
-            position: relative;
-            display: inline-block;
-            height: 3.2rem;
-            overflow: hidden;
-            vertical-align: middle;
-            min-width: 160px;
-        }
-        .kapi-rotator .tick-word {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 3.2rem;
-            line-height: 3.2rem;
-            display: flex;
-            align-items: center;
-            font-family: "Source Sans Pro", "Noto Sans", "Iskoola Pota", "Sinhala Sangam MN", "Noto Sans Sinhala", "Latha", "Tamil Sangam MN", "Noto Sans Tamil", sans-serif;
-            font-size: 2.1rem;
-            font-weight: 700;
-            color: #FFC72C;
-            white-space: nowrap;
-            transform: translateY(120%);
-            opacity: 0;
-        }
-        .kapi-rotator .tick-word.tick-active {
-            animation: kapi-tick-in 2s infinite;
-        }
+        html, body { background: transparent; margin: 0; padding: 0; }
+        .kapi-title-wrap { font-family: "Source Sans Pro", "Noto Sans", "Iskoola Pota", "Sinhala Sangam MN", "Noto Sans Sinhala", "Latha", "Tamil Sangam MN", "Noto Sans Tamil", sans-serif; display: flex; align-items: center; gap: 4px; height: 3.2rem; padding-top: 4px; margin-bottom: 2px; }
+        .kapi-title-wrap .fixed-part { font-size: 2.1rem; font-weight: 700; color: #4A90E2; line-height: 3.2rem; }
+        .kapi-rotator { position: relative; display: inline-block; height: 3.2rem; overflow: hidden; vertical-align: middle; min-width: 160px; }
+        .kapi-rotator .tick-word { position: absolute; left: 0; top: 0; width: 100%; height: 3.2rem; line-height: 3.2rem; display: flex; align-items: center; font-family: inherit; font-size: 2.1rem; font-weight: 700; color: #FFC72C; white-space: nowrap; transform: translateY(120%); opacity: 0; }
+        .kapi-rotator .tick-word.tick-active { animation: kapi-tick-in 2s infinite; }
         @keyframes kapi-tick-in {
             0%   { transform: translateY(120%); opacity: 0; }
             12%  { transform: translateY(0%); opacity: 1; }
@@ -258,14 +175,9 @@ components.html(
     </div>
     <script>
         (function() {
-            const words = [
-                { text: "Kapruka", lang: "en" },
-                { text: "கப்ருகா", lang: "ta" },
-                { text: "කප්රුක", lang: "si" }
-            ];
+            const words = [{ text: "Kapruka", lang: "en" }, { text: "கப்ருகா", lang: "ta" }, { text: "කප්රුක", lang: "si" }];
             const container = document.getElementById("kapi-rotator");
             let current = 0;
-
             function showWord(idx) {
                 container.innerHTML = "";
                 const span = document.createElement("span");
@@ -274,33 +186,22 @@ components.html(
                 span.textContent = words[idx].text;
                 container.appendChild(span);
             }
-
             showWord(current);
-            setInterval(() => {
-                current = (current + 1) % words.length;
-                showWord(current);
-            }, 2000);
+            setInterval(() => { current = (current + 1) % words.length; showWord(current); }, 2000);
         })();
     </script>
-    """,
-    height=75,
+    """
 )
 st.caption("⚡ Live MCP Smart Assistant | English • Tamil • Sinhala • Singlish • Tanglish")
 
 if not st.session_state.chat_history:
     st.info(
-        "👋 **Just type or tap the mic below to ask for anything** — e.g. "
-        "*\"chocolate hamper under 5000\"*.\n\n"
-        "Want more control? The **sidebar on the left** lets you filter by "
-        "budget, occasion, and delivery date, or search by keyword — "
-        "optional, use it only if you need it."
+        "👋 **Just type or tap the mic below to ask for anything**\n\n"
+        "Want more control? The **sidebar on the left** lets you filter by budget, occasion, and delivery date, or search by keyword."
     )
 
 def render_product_card(prod, idx, key_prefix):
-    st.image(
-        prod.get("image_url", "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&q=80"),
-        width=None
-    )
+    st.image(prod.get("image_url", "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&q=80"), width=None)
     st.markdown(f"**{prod.get('name')}**")
     st.caption(f"LKR {safe_price(prod):,.2f}")
 
@@ -324,26 +225,19 @@ for chat_idx, chat in enumerate(st.session_state.chat_history):
         if "products" in chat and chat["products"]:
             cols = st.columns(min(len(chat["products"]), 4))
             for idx, prod in enumerate(chat["products"]):
-                col_idx = idx % 4
-                with cols[col_idx]:
+                with cols[idx % 4]:
                     render_product_card(prod, idx, key_prefix=f"hist_{chat_idx}")
 
 # Chat execution bar
 user_query = st.chat_input("Ask Kapi...")
 
-# --- TRILINGUAL AND DIALECT MIX AUDIO ENGINE ---
+# Trilingual and Dialect Mix Audio Engine
 voice_html = """
 <script>
 (function() {
     const doc = window.parent.document;
-    const MIC_SVG = `
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z"
-                  stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M19 11a7 7 0 0 1-14 0M12 18v3"
-                  stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-    `;
+    const MIC_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    
     function mount() {
         const submitBtn = doc.querySelector('button[data-testid="stChatInputSubmitButton"]');
         if (!submitBtn || !submitBtn.parentElement) return false;
@@ -357,52 +251,25 @@ voice_html = """
         const style = doc.createElement('style');
         style.id = 'bar-mic-style';
         style.innerHTML = `
-            #bar-mic-btn {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 36px;
-                height: 36px;
-                margin: 0 6px;
-                border-radius: 50%;
-                border: none;
-                background: rgba(136, 136, 136, 0.12);
-                color: #6b6b6b;
-                cursor: pointer;
-                flex-shrink: 0;
-                transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-            }
+            #bar-mic-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin: 0 6px; border-radius: 50%; border: none; background: rgba(136, 136, 136, 0.12); color: #6b6b6b; cursor: pointer; flex-shrink: 0; transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease; }
             #bar-mic-btn svg { width: 18px; height: 18px; }
             #bar-mic-btn:hover { background: rgba(136, 136, 136, 0.22); }
             #bar-mic-btn:active { transform: scale(0.92); }
-            #bar-mic-btn.recording {
-                background: rgba(255, 75, 75, 0.14);
-                color: #ff4b4b;
-                animation: bar-mic-pulse 1.1s ease-in-out infinite;
-            }
-            @keyframes bar-mic-pulse {
-                0%, 100% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.35); }
-                50% { box-shadow: 0 0 0 6px rgba(255, 75, 75, 0); }
-            }
-            #voice-indicator-label {
-                font-size: 11px;
-                color: #888;
-                margin-right: 4px;
-                font-weight: 600;
-                letter-spacing: 0.2px;
-            }
+            #bar-mic-btn.recording { background: rgba(255, 75, 75, 0.14); color: #ff4b4b; animation: bar-mic-pulse 1.1s ease-in-out infinite; }
+            @keyframes bar-mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.35); } 50% { box-shadow: 0 0 0 6px rgba(255, 75, 75, 0); } }
+            #voice-indicator-label { font-size: 11px; color: #888; margin-right: 4px; font-weight: 600; letter-spacing: 0.2px; }
         `;
         doc.head.appendChild(style);
+        
         const micBtn = doc.createElement('button');
         micBtn.id = 'bar-mic-btn';
         micBtn.type = 'button';
-        micBtn.title = 'Tap to speak. Use language tag to switch between variations';
         micBtn.innerHTML = MIC_SVG;
         
         const LANG_MODES = [
-            { key: 'en',       label: 'English',  tag: 'en-US' },
-            { key: 'si',       label: 'Sinhala',  tag: 'si-LK' },
-            { key: 'ta',       label: 'Tamil',    tag: 'ta-LK' },
+            { key: 'en', label: 'English', tag: 'en-US' },
+            { key: 'si', label: 'Sinhala', tag: 'si-LK' },
+            { key: 'ta', label: 'Tamil', tag: 'ta-LK' },
             { key: 'singlish', label: 'Singlish', tag: 'en-US' },
             { key: 'tanglish', label: 'Tanglish', tag: 'en-US' },
         ];
@@ -411,17 +278,13 @@ voice_html = """
         const langTag = doc.createElement('button');
         langTag.id = 'bar-lang-tag';
         langTag.type = 'button';
-        langTag.title = 'Click to change recognition language';
         langTag.innerText = LANG_MODES[modeIdx].label;
-        langTag.style.cssText = `
-            font-size: 11px; color: #888; margin-right: 4px; font-weight: 600;
-            letter-spacing: 0.2px; border: none; background: rgba(136,136,136,0.12);
-            border-radius: 10px; padding: 3px 9px; cursor: pointer;
-        `;
+        langTag.style.cssText = `font-size: 11px; color: #888; margin-right: 4px; font-weight: 600; letter-spacing: 0.2px; border: none; background: rgba(136,136,136,0.12); border-radius: 10px; padding: 3px 9px; cursor: pointer;`;
         langTag.addEventListener('click', () => {
             modeIdx = (modeIdx + 1) % LANG_MODES.length;
             langTag.innerText = LANG_MODES[modeIdx].label;
         });
+        
         const indicatorLabel = doc.createElement('span');
         indicatorLabel.id = 'voice-indicator-label';
         indicatorLabel.innerText = '🎙️';
@@ -435,12 +298,7 @@ voice_html = """
 
     function wireUp(micBtn, indicatorLabel, langTag, LANG_MODES, getModeIdx) {
         const SpeechRecognition = window.parent.SpeechRecognition || window.parent.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            micBtn.style.display = 'none';
-            indicatorLabel.style.display = 'none';
-            langTag.style.display = 'none';
-            return;
-        }
+        if (!SpeechRecognition) return;
 
         let isRecording = false;
         micBtn.addEventListener('click', () => {
@@ -448,7 +306,6 @@ voice_html = """
             const recognition = new SpeechRecognition();
             recognition.continuous = false;
             recognition.interimResults = false;
-
             const mode = LANG_MODES[getModeIdx()];
             recognition.lang = mode.tag;
 
@@ -469,13 +326,7 @@ voice_html = """
                     textarea.focus();
                 }
             };
-            recognition.onerror = () => {
-                isRecording = false;
-                micBtn.classList.remove('recording');
-                indicatorLabel.innerText = '🎙️';
-                indicatorLabel.style.color = '#888';
-            };
-            recognition.onend = () => {
+            recognition.onerror = recognition.onend = () => {
                 isRecording = false;
                 micBtn.classList.remove('recording');
                 indicatorLabel.innerText = '🎙️';
@@ -494,7 +345,7 @@ voice_html = """
 })();
 </script>
 """
-components.html(voice_html, height=0)
+st.html(voice_html)
 
 active_query = user_query
 if not active_query and sidebar_search_clicked and (keyword_override or occasion != "None"):
@@ -513,7 +364,6 @@ if active_query:
         with st.chat_message("user"):
             st.markdown(f"🔍 *Executing Sidebar Override Query:* **{active_query}**")
 
-    # Trace active session context packaging
     root_logger.info(f"🚀 Main UI Thread packaging state payload context for user action.")
 
     with st.chat_message("assistant"):
@@ -530,13 +380,7 @@ if active_query:
                 response = {"text": "An execution error occurred.", "products": []}
 
             raw_products = response.get("products", [])
-
-            # FIXED: use safe_price() instead of float() to avoid crashing
-            # when the MCP server returns a non-numeric price (e.g. "1,500", "Rs. 1500", None)
-            filtered_products = [
-                p for p in raw_products
-                if price_range[0] <= safe_price(p) <= price_range[1]
-            ]
+            filtered_products = [p for p in raw_products if price_range[0] <= safe_price(p) <= price_range[1]]
 
             if sort_order == "Price: Low to High":
                 filtered_products.sort(key=safe_price)
@@ -546,26 +390,20 @@ if active_query:
             st.markdown(response["text"])
 
             if raw_products and not filtered_products:
-                st.info(
-                    f"Found {len(raw_products)} matching product(s), but none fall within "
-                    f"your LKR {price_range[0]:,}–{price_range[1]:,} budget filter."
-                )
+                st.info(f"Found {len(raw_products)} matching product(s), but none fall within your LKR {price_range[0]:,}–{price_range[1]:,} budget filter.")
 
             chat_entry = {"role": "assistant", "content": response["text"], "products": []}
             if filtered_products:
                 chat_entry["products"] = filtered_products
                 cols = st.columns(min(len(filtered_products), 4))
                 for idx, prod in enumerate(filtered_products):
-                    col_idx = idx % 4
-                    with cols[col_idx]:
+                    with cols[idx % 4]:
                         render_product_card(prod, idx, key_prefix=f"live_{len(st.session_state.chat_history)}")
             
             st.session_state.chat_history.append(chat_entry)
             st.rerun()
 
-# ==============================================================================
-# --- 🛠️ DYNAMIC STREAMING AGENT TRACE LOGGER PANEL ---
-# ==============================================================================
+# Dynamic Streaming Agent Trace Logger Panel
 st.markdown("---")
 with st.expander("🛠️ System Multi-Agent Terminal Trace Logs", expanded=True):
     current_logs = st.session_state.log_stream.getvalue()
