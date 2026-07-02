@@ -12,7 +12,9 @@ from main import run_agent_pipeline
 from memory.session_buffer import SessionBuffer
 from utils.config import get_config
 
-# Page Configuration (Must be first)
+# ==============================================================================
+# --- PAGE CONFIGURATION (MUST BE FIRST) ---
+# ==============================================================================
 st.set_page_config(
     page_title="Kapi - Kapruka Smart Agent",
     page_icon="🛍️",
@@ -20,6 +22,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ==============================================================================
+# --- 🛡️ SAFE PRICE HELPER ---
+# ==============================================================================
 def safe_price(p: dict) -> float:
     try:
         raw = str(p.get("price", 0)).replace(",", "").replace("LKR", "").replace("Rs.", "").strip()
@@ -27,28 +32,32 @@ def safe_price(p: dict) -> float:
     except (ValueError, TypeError):
         return 0.0
 
-# System Trace Terminal Capture
+# ==============================================================================
+# --- 🛠️ REAL-TIME SYSTEM TRACE TERMINAL CAPTURE ENGINE ---
+# ==============================================================================
 if "log_stream" not in st.session_state:
     st.session_state.log_stream = io.StringIO()
+    
+    # ⚠️ FIXED: Indented to guarantee this heavy logger setup ONLY happens exactly once!
+    logging.basicConfig(level=logging.INFO, force=True)
+    root_logger = logging.getLogger()
 
-logging.basicConfig(level=logging.INFO, force=True)
-root_logger = logging.getLogger()
+    for h in root_logger.handlers[:]:
+        root_logger.removeHandler(h)
 
-for h in root_logger.handlers[:]:
-    root_logger.removeHandler(h)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter("⏰ {asctime} | [{levelname}] ➔ {message}", style='{'))
+    root_logger.addHandler(console_handler)
 
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(logging.Formatter("⏰ {asctime} | [{levelname}] ➔ {message}", style='{'))
-root_logger.addHandler(console_handler)
-
-string_handler = logging.StreamHandler(st.session_state.log_stream)
-string_handler.setFormatter(logging.Formatter("⏰ {asctime} | [{levelname}] ➔ {message}", style='{'))
-root_logger.addHandler(string_handler)
-
-if not st.session_state.log_stream.getvalue():
+    string_handler = logging.StreamHandler(st.session_state.log_stream)
+    string_handler.setFormatter(logging.Formatter("⏰ {asctime} | [{levelname}] ➔ {message}", style='{'))
+    root_logger.addHandler(string_handler)
+    
     root_logger.info("⚡ Kapi Smart Agent Multi-Agent Kernel Initialized successfully.")
 
-# Session State Inits
+# ==============================================================================
+# --- SESSION STATE INITS ---
+# ==============================================================================
 if "memory" not in st.session_state:
     st.session_state.memory = SessionBuffer(max_pairs=5)
 if "chat_history" not in st.session_state:
@@ -58,7 +67,9 @@ if "cart" not in st.session_state:
 if "order_history" not in st.session_state:
     st.session_state.order_history = []
 
-# Sidebar Interface
+# ==============================================================================
+# --- SIDEBAR INTERFACE ---
+# ==============================================================================
 st.sidebar.title("👤 Family Profile Dashboard")
 config = get_config()
 PROFILES_FILE = Path(config.get("paths.profiles_file", "data/profiles.json"))
@@ -148,7 +159,9 @@ else:
         st.session_state.order_history = []
         st.rerun()
 
-# Main Header Interface
+# ==============================================================================
+# --- MAIN HEADER INTERFACE ---
+# ==============================================================================
 st.html(
     """
     <link rel="preconnect" href="https://fonts.googleapis.com">
