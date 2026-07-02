@@ -14,16 +14,20 @@ from memory.session_buffer import SessionBuffer
 from utils.config import get_config
 
 # ==============================================================================
-# --- 🛡️ SAFE PRICE HELPER (fixes uncaught float() crashes) ---
+# --- PAGE CONFIGURATION (MUST BE FIRST) ---
+# ==============================================================================
+st.set_page_config(
+    page_title="Kapi - Kapruka Smart Agent",
+    page_icon="🛍️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ==============================================================================
+# --- 🛡️ SAFE PRICE HELPER ---
 # ==============================================================================
 def safe_price(p: dict) -> float:
-    """
-    Safely coerce a product's price field to a float.
-    Handles strings like '1,500', 'LKR 1500', 'Rs. 1500', None, or empty values
-    without raising ValueError/TypeError — which previously crashed the app
-    on any search or cart interaction if the MCP server returned a
-    non-numeric price.
-    """
+    """Safely coerce a product's price field to a float."""
     try:
         raw = str(p.get("price", 0)).replace(",", "").replace("LKR", "").replace("Rs.", "").strip()
         return float(raw) if raw else 0.0
@@ -36,33 +40,28 @@ def safe_price(p: dict) -> float:
 if "log_stream" not in st.session_state:
     st.session_state.log_stream = io.StringIO()
 
-# Configure the root logging layout to pipe data into our session stream
 logging.basicConfig(level=logging.INFO, force=True)
 root_logger = logging.getLogger()
 
-# Prevent duplicate handlers from stacking on redraws
 for h in root_logger.handlers[:]:
     root_logger.removeHandler(h)
 
-# FIXED: Added style='{' to cleanly format time brackets without ValueError crashes
+# 1. Standard Console Handler (For Railway Logs to capture)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter("⏰ {asctime} | [{levelname}] ➔ {message}", style='{'))
+root_logger.addHandler(console_handler)
+
+# 2. Session State Handler (For Streamlit UI Terminal Expander)
 string_handler = logging.StreamHandler(st.session_state.log_stream)
 string_handler.setFormatter(logging.Formatter("⏰ {asctime} | [{levelname}] ➔ {message}", style='{'))
 root_logger.addHandler(string_handler)
 
-# Inject an initial boot trace log line 
 if not st.session_state.log_stream.getvalue():
     root_logger.info("⚡ Kapi Smart Agent Multi-Agent Kernel Initialized successfully.")
 
 # ==============================================================================
-# --- PAGE CONFIGURATION ---
+# --- SESSION STATE INITS ---
 # ==============================================================================
-st.set_page_config(
-    page_title="Kapi - Kapruka Smart Agent",
-    page_icon="🛍️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 if "memory" not in st.session_state:
     st.session_state.memory = SessionBuffer(max_pairs=5)
 if "chat_history" not in st.session_state:
@@ -495,7 +494,7 @@ voice_html = """
 })();
 </script>
 """
-#components.html(voice_html, height=0)
+components.html(voice_html, height=0)
 
 active_query = user_query
 if not active_query and sidebar_search_clicked and (keyword_override or occasion != "None"):
