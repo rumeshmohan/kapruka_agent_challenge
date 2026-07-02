@@ -21,7 +21,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Standard Safe Logger
 logger = logging.getLogger(__name__)
 
 # ==============================================================================
@@ -141,50 +140,8 @@ else:
 # ==============================================================================
 # --- MAIN HEADER INTERFACE ---
 # ==============================================================================
-st.html(
-    """
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@700&family=Noto+Sans+Tamil:wght@700&family=Noto+Sans+Sinhala:wght@700&display=swap" rel="stylesheet">
-    <style>
-        html, body { background: transparent; margin: 0; padding: 0; }
-        .kapi-title-wrap { font-family: "Source Sans Pro", "Noto Sans", "Iskoola Pota", "Sinhala Sangam MN", "Noto Sans Sinhala", "Latha", "Tamil Sangam MN", "Noto Sans Tamil", sans-serif; display: flex; align-items: center; gap: 4px; height: 3.2rem; padding-top: 4px; margin-bottom: 2px; }
-        .kapi-title-wrap .fixed-part { font-size: 2.1rem; font-weight: 700; color: #4A90E2; line-height: 3.2rem; }
-        .kapi-rotator { position: relative; display: inline-block; height: 3.2rem; overflow: hidden; vertical-align: middle; min-width: 160px; }
-        .kapi-rotator .tick-word { position: absolute; left: 0; top: 0; width: 100%; height: 3.2rem; line-height: 3.2rem; display: flex; align-items: center; font-family: inherit; font-size: 2.1rem; font-weight: 700; color: #FFC72C; white-space: nowrap; transform: translateY(120%); opacity: 0; }
-        .kapi-rotator .tick-word.tick-active { animation: kapi-tick-in 2s infinite; }
-        @keyframes kapi-tick-in {
-            0%   { transform: translateY(120%); opacity: 0; }
-            12%  { transform: translateY(0%); opacity: 1; }
-            70%  { transform: translateY(0%); opacity: 1; }
-            85%  { transform: translateY(-120%); opacity: 0; }
-            100% { transform: translateY(-120%); opacity: 0; }
-        }
-    </style>
-    <div class="kapi-title-wrap">
-        <span class="fixed-part">🛍️ Kapi -</span>
-        <span class="kapi-rotator" id="kapi-rotator"></span>
-        <span class="fixed-part">Smart Agent</span>
-    </div>
-    <script>
-        (function() {
-            const words = [{ text: "Kapruka", lang: "en" }, { text: "கப்ருகா", lang: "ta" }, { text: "කප්රුක", lang: "si" }];
-            const container = document.getElementById("kapi-rotator");
-            let current = 0;
-            function showWord(idx) {
-                if(!container) return;
-                container.innerHTML = "";
-                const span = document.createElement("span");
-                span.className = "tick-word tick-active";
-                span.lang = words[idx].lang;
-                span.textContent = words[idx].text;
-                container.appendChild(span);
-            }
-            showWord(current);
-            setInterval(() => { current = (current + 1) % words.length; showWord(current); }, 2000);
-        })();
-    </script>
-    """
-)
+# Replaced volatile HTML/JS injections with native Streamlit components
+st.title("🛍️ Kapi - Smart Agent")
 st.caption("⚡ Live MCP Smart Assistant | English • Tamil • Sinhala • Singlish • Tanglish")
 
 if not st.session_state.chat_history:
@@ -241,7 +198,7 @@ if active_query:
         with st.chat_message("user"):
             st.markdown(f"🔍 *Executing Sidebar Override Query:* **{active_query}**")
 
-    logger.info(f"🚀 Main UI Thread packaging state payload context for user action.")
+    logger.info("🚀 Main UI Thread packaging state payload context for user action.")
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
@@ -279,6 +236,3 @@ if active_query:
             
             st.session_state.chat_history.append(chat_entry)
             st.rerun()
-
-st.markdown("---")
-st.caption("System Trace Terminal has been migrated to standard console output. Please view Railway deployment logs for active traces.")
