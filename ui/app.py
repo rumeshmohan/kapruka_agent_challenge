@@ -495,7 +495,7 @@ voice_html = """
 })();
 </script>
 """
-components.html(voice_html, height=0)
+#components.html(voice_html, height=0)
 
 active_query = user_query
 if not active_query and sidebar_search_clicked and (keyword_override or occasion != "None"):
