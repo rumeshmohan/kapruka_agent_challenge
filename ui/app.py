@@ -14,6 +14,23 @@ from memory.session_buffer import SessionBuffer
 from utils.config import get_config
 
 # ==============================================================================
+# --- 🛡️ SAFE PRICE HELPER (fixes uncaught float() crashes) ---
+# ==============================================================================
+def safe_price(p: dict) -> float:
+    """
+    Safely coerce a product's price field to a float.
+    Handles strings like '1,500', 'LKR 1500', 'Rs. 1500', None, or empty values
+    without raising ValueError/TypeError — which previously crashed the app
+    on any search or cart interaction if the MCP server returned a
+    non-numeric price.
+    """
+    try:
+        raw = str(p.get("price", 0)).replace(",", "").replace("LKR", "").replace("Rs.", "").strip()
+        return float(raw) if raw else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+# ==============================================================================
 # --- 🛠️ REAL-TIME SYSTEM TRACE TERMINAL CAPTURE ENGINE ---
 # ==============================================================================
 if "log_stream" not in st.session_state:
@@ -137,14 +154,14 @@ else:
         item_id = item.get("id", idx)
         with st.sidebar.container(border=True):
             st.markdown(f"**{item.get('name', 'Product')}**")
-            st.caption(f"Price: LKR {item.get('price', 0):,}")
+            st.caption(f"Price: LKR {safe_price(item):,.2f}")
             if st.button("Remove", key=f"remove_cart_{item_id}"):
                 st.session_state.cart = [
                     c for c in st.session_state.cart if c.get("id", idx) != item_id
                 ]
                 st.rerun()
 
-    total_price = sum(float(item.get("price", 0)) for item in st.session_state.cart)
+    total_price = sum(safe_price(item) for item in st.session_state.cart)
     st.sidebar.metric(label="Total Summary Value", value=f"LKR {total_price:,.2f}")
     
     col1, col2 = st.sidebar.columns(2)
@@ -166,7 +183,7 @@ if not st.session_state.order_history:
     st.sidebar.caption("No historical invoices processed in this session.")
 else:
     for idx, historical_item in enumerate(st.session_state.order_history):
-        st.sidebar.caption(f"✓ Paid: **{historical_item.get('name')}** (LKR {historical_item.get('price', 0):,})")
+        st.sidebar.caption(f"✓ Paid: **{historical_item.get('name')}** (LKR {safe_price(historical_item):,.2f})")
     if st.sidebar.button("❌ Clear Order Logs"):
         st.session_state.order_history = []
         st.rerun()
@@ -286,7 +303,7 @@ def render_product_card(prod, idx, key_prefix):
         width=None
     )
     st.markdown(f"**{prod.get('name')}**")
-    st.caption(f"LKR {prod.get('price', 0):,}")
+    st.caption(f"LKR {safe_price(prod):,.2f}")
 
     product_url = prod.get("product_url") or prod.get("url")
     if product_url:
@@ -306,9 +323,10 @@ for chat_idx, chat in enumerate(st.session_state.chat_history):
     with st.chat_message(chat["role"]):
         st.markdown(chat["content"])
         if "products" in chat and chat["products"]:
-            cols = st.columns(len(chat["products"]))
+            cols = st.columns(min(len(chat["products"]), 4))
             for idx, prod in enumerate(chat["products"]):
-                with cols[idx]:
+                col_idx = idx % 4
+                with cols[col_idx]:
                     render_product_card(prod, idx, key_prefix=f"hist_{chat_idx}")
 
 # Chat execution bar
@@ -511,18 +529,21 @@ if active_query:
             except Exception as e:
                 root_logger.error(f"❌ Core Pipeline Exception caught: {e}")
                 response = {"text": "An execution error occurred.", "products": []}
-            
+
             raw_products = response.get("products", [])
+
+            # FIXED: use safe_price() instead of float() to avoid crashing
+            # when the MCP server returns a non-numeric price (e.g. "1,500", "Rs. 1500", None)
             filtered_products = [
-                p for p in raw_products 
-                if price_range[0] <= float(p.get("price", 0)) <= price_range[1]
+                p for p in raw_products
+                if price_range[0] <= safe_price(p) <= price_range[1]
             ]
-            
+
             if sort_order == "Price: Low to High":
-                filtered_products.sort(key=lambda x: float(x.get("price", 0)))
+                filtered_products.sort(key=safe_price)
             elif sort_order == "Price: High to Low":
-                filtered_products.sort(key=lambda x: float(x.get("price", 0)), reverse=True)
-                 
+                filtered_products.sort(key=safe_price, reverse=True)
+
             st.markdown(response["text"])
 
             if raw_products and not filtered_products:
