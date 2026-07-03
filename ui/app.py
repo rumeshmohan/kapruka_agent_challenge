@@ -109,7 +109,7 @@ else:
             st.caption(f"Price: LKR {safe_price(item):,.2f}")
             if st.button("Remove", key=f"remove_cart_{item_id}"):
                 st.session_state.cart = [c for c in st.session_state.cart if c.get("id", idx) != item_id]
-                st.rerun()
+                st.rerun(scope="app")
 
     total_price = sum(safe_price(item) for item in st.session_state.cart)
     st.sidebar.metric(label="Total Summary Value", value=f"LKR {total_price:,.2f}")
@@ -118,13 +118,13 @@ else:
     with col1:
         if st.button("🗑️ Clear Cart", key="clear_cart_btn"):
             st.session_state.cart = []
-            st.rerun()
+            st.rerun(scope="app")
     with col2:
         if st.button("🚀 Buy Now", key="buy_now_btn"):
             st.session_state.order_history.extend(st.session_state.cart)
             st.session_state.cart = []
             st.sidebar.success("Order Placed!")
-            st.rerun()
+            st.rerun(scope="app")
 
 st.sidebar.markdown("---")
 st.sidebar.title("📜 Order History Vault")
@@ -135,7 +135,7 @@ else:
         st.sidebar.caption(f"✓ Paid: **{historical_item.get('name')}** (LKR {safe_price(historical_item):,.2f})")
     if st.sidebar.button("❌ Clear Order Logs"):
         st.session_state.order_history = []
-        st.rerun()
+        st.rerun(scope="app")
 
 # ==============================================================================
 # --- MAIN HEADER INTERFACE ---
@@ -165,8 +165,7 @@ def render_product_card(prod, idx, key_prefix):
     else:
         if st.button("🛒 Add to Cart", key=f"{key_prefix}_add_{prod.get('id')}_{idx}", use_container_width=True):
             st.session_state.cart.append(prod)
-            st.success("Added!")
-            st.rerun()
+            st.rerun(scope="app")
 
 # Render chat messages from history
 for chat_idx, chat in enumerate(st.session_state.chat_history):
@@ -189,50 +188,53 @@ if not active_query and sidebar_search_clicked and (keyword_override or occasion
     active_query = f"Show me {built_str.strip()}"
 
 if active_query:
-    if active_query == user_query:
-        st.session_state.chat_history.append({"role": "user", "content": user_query})
-        with st.chat_message("user"):
-            st.markdown(user_query)
-    else:
-        st.session_state.chat_history.append({"role": "user", "content": f"[Filter Search]: {active_query}"})
-        with st.chat_message("user"):
-            st.markdown(f"🔍 *Executing Sidebar Override Query:* **{active_query}**")
+    try:
+        if active_query == user_query:
+            st.session_state.chat_history.append({"role": "user", "content": user_query})
+            with st.chat_message("user"):
+                st.markdown(user_query)
+        else:
+            st.session_state.chat_history.append({"role": "user", "content": f"[Filter Search]: {active_query}"})
+            with st.chat_message("user"):
+                st.markdown(f"🔍 *Executing Sidebar Override Query:* **{active_query}**")
 
-    logger.info("🚀 Main UI Thread packaging state payload context for user action.")
+        logger.info("🚀 Main UI Thread packaging state payload context for user action.")
 
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            pipeline_kwargs = dict(
-                query=active_query,
-                session_memory=st.session_state.memory,
-                cart_items=st.session_state.cart,
-            )
-            try:
-                response = run_agent_pipeline(**pipeline_kwargs)
-            except Exception as e:
-                logger.error(f"❌ Core Pipeline Exception caught: {e}")
-                response = {"text": f"An execution error occurred: {e}", "products": []}
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                pipeline_kwargs = dict(
+                    query=active_query,
+                    session_memory=st.session_state.memory,
+                    cart_items=st.session_state.cart,
+                )
+                try:
+                    response = run_agent_pipeline(**pipeline_kwargs)
+                except Exception as e:
+                    logger.error(f"❌ Core Pipeline Exception caught: {e}", exc_info=True)
+                    response = {"text": f"An execution error occurred: {str(e)}", "products": []}
 
-            raw_products = response.get("products", [])
-            filtered_products = [p for p in raw_products if price_range[0] <= safe_price(p) <= price_range[1]]
+                raw_products = response.get("products", [])
+                filtered_products = [p for p in raw_products if price_range[0] <= safe_price(p) <= price_range[1]]
 
-            if sort_order == "Price: Low to High":
-                filtered_products.sort(key=safe_price)
-            elif sort_order == "Price: High to Low":
-                filtered_products.sort(key=safe_price, reverse=True)
+                if sort_order == "Price: Low to High":
+                    filtered_products.sort(key=safe_price)
+                elif sort_order == "Price: High to Low":
+                    filtered_products.sort(key=safe_price, reverse=True)
 
-            st.markdown(response["text"])
+                st.markdown(response["text"])
 
-            if raw_products and not filtered_products:
-                st.info(f"Found {len(raw_products)} matching product(s), but none fall within your LKR {price_range[0]:,}–{price_range[1]:,} budget filter.")
+                if raw_products and not filtered_products:
+                    st.info(f"Found {len(raw_products)} matching product(s), but none fall within your LKR {price_range[0]:,}–{price_range[1]:,} budget filter.")
 
-            chat_entry = {"role": "assistant", "content": response["text"], "products": []}
-            if filtered_products:
-                chat_entry["products"] = filtered_products
-                cols = st.columns(min(len(filtered_products), 4))
-                for idx, prod in enumerate(filtered_products):
-                    with cols[idx % 4]:
-                        render_product_card(prod, idx, key_prefix=f"live_{len(st.session_state.chat_history)}")
-            
-            st.session_state.chat_history.append(chat_entry)
-            st.rerun()
+                chat_entry = {"role": "assistant", "content": response["text"], "products": []}
+                if filtered_products:
+                    chat_entry["products"] = filtered_products
+                    cols = st.columns(min(len(filtered_products), 4))
+                    for idx, prod in enumerate(filtered_products):
+                        with cols[idx % 4]:
+                            render_product_card(prod, idx, key_prefix=f"live_{len(st.session_state.chat_history)}")
+
+                st.session_state.chat_history.append(chat_entry)
+    except Exception as e:
+        logger.error(f"❌ Critical error in query processing: {e}", exc_info=True)
+        st.error(f"An unexpected error occurred: {str(e)}. Please try again.")
