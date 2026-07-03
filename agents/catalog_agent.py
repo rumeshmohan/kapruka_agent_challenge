@@ -109,7 +109,7 @@ def handle_catalog_query(query: str, history: str = "") -> dict:
                 "content": json.dumps(combined_products)
             })
             
-            second_response = client.chat.completions.create(model=MODEL, messages=messages, temperature=0.3)
+            second_response = client.chat.completions.create(model=model, messages=messages, temperature=0.3)
             text = second_response.choices[0].message.content.strip()
         else:
             text = response_message.content.strip()
