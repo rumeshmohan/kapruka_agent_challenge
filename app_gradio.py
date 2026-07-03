@@ -51,7 +51,6 @@ demo = gr.ChatInterface(
         "I need a birthday gift for my mom",
         "Find flowers for delivery in Colombo"
     ],
-    theme="soft",
     retry_btn=None,
     undo_btn=None,
     clear_btn="Clear Chat"
