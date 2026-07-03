@@ -22,6 +22,6 @@ An intelligent shopping assistant powered by multi-agent AI system.
 ## Configuration
 
 Add these secrets in your Hugging Face Space settings (at least one required):
-- `OPENAI_API_KEY`
-- `GROQ_API_KEY`
-- `OPENROUTER_API_KEY`
+- `GROQ_API_KEY` - For Groq models
+- `GEMINI_API_KEY` - For Google Gemini
+- `OPENAI_API_KEY` - For OpenAI (optional)

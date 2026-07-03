@@ -39,7 +39,7 @@ def process_query(message, history):
         return text
 
     except Exception as e:
-        return f"❌ Error: {str(e)}\n\nPlease make sure API keys are set in Settings."
+        return f"❌ Error: {str(e)}\n\nPlease make sure API keys are set in Settings → Secrets.\nRequired: GROQ_API_KEY or GEMINI_API_KEY"
 
 # Create Gradio interface
 demo = gr.ChatInterface(
