@@ -188,30 +188,33 @@ if not active_query and sidebar_search_clicked and (keyword_override or occasion
     active_query = f"Show me {built_str.strip()}"
 
 if active_query:
-    try:
-        if active_query == user_query:
-            st.session_state.chat_history.append({"role": "user", "content": user_query})
-            with st.chat_message("user"):
-                st.markdown(user_query)
-        else:
-            st.session_state.chat_history.append({"role": "user", "content": f"[Filter Search]: {active_query}"})
-            with st.chat_message("user"):
-                st.markdown(f"🔍 *Executing Sidebar Override Query:* **{active_query}**")
+    # Add to history immediately to prevent reprocessing
+    if active_query == user_query:
+        st.session_state.chat_history.append({"role": "user", "content": user_query})
+    else:
+        st.session_state.chat_history.append({"role": "user", "content": f"[Filter Search]: {active_query}"})
 
-        logger.info("🚀 Main UI Thread packaging state payload context for user action.")
+    # Clear the input to prevent resubmission
+    active_query = None
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
+    # Display user message
+    with st.chat_message("user"):
+        st.markdown(st.session_state.chat_history[-1]["content"])
+
+    # Process query
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            try:
+                logger.info("🚀 Starting agent pipeline")
+
                 pipeline_kwargs = dict(
-                    query=active_query,
+                    query=st.session_state.chat_history[-1]["content"],
                     session_memory=st.session_state.memory,
                     cart_items=st.session_state.cart,
                 )
-                try:
-                    response = run_agent_pipeline(**pipeline_kwargs)
-                except Exception as e:
-                    logger.error(f"❌ Core Pipeline Exception caught: {e}", exc_info=True)
-                    response = {"text": f"An execution error occurred: {str(e)}", "products": []}
+
+                response = run_agent_pipeline(**pipeline_kwargs)
+                logger.info("✅ Agent pipeline completed")
 
                 raw_products = response.get("products", [])
                 filtered_products = [p for p in raw_products if price_range[0] <= safe_price(p) <= price_range[1]]
@@ -235,6 +238,12 @@ if active_query:
                             render_product_card(prod, idx, key_prefix=f"live_{len(st.session_state.chat_history)}")
 
                 st.session_state.chat_history.append(chat_entry)
-    except Exception as e:
-        logger.error(f"❌ Critical error in query processing: {e}", exc_info=True)
-        st.error(f"An unexpected error occurred: {str(e)}. Please try again.")
+
+            except Exception as e:
+                logger.error(f"❌ Pipeline error: {e}", exc_info=True)
+                st.error(f"Error: {str(e)}")
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": f"I encountered an error: {str(e)}",
+                    "products": []
+                })
