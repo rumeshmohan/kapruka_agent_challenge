@@ -4,10 +4,9 @@ emoji: 🛍️
 colorFrom: blue
 colorTo: purple
 sdk: streamlit
-sdk_version: "1.58.0"
+sdk_version: "1.32.0"
 app_file: app_simple.py
 pinned: false
-license: mit
 ---
 
 # 🛍️ Kapi - Kapruka Smart Agent
