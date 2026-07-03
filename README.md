@@ -4,7 +4,7 @@ emoji: 🛍️
 colorFrom: blue
 colorTo: purple
 sdk: gradio
-app_file: app_gradio.py
+app_file: app_gradio_full.py
 pinned: false
 python_version: "3.11"
 ---
