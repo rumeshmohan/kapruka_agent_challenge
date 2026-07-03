@@ -1,19 +1,8 @@
 [server]
-address = "0.0.0.0"
-port = 8080
+headless = true
 enableCORS = false
 enableXsrfProtection = false
-headless = true
-fileWatcherType = "none"
-maxUploadSize = 50
+port = 7860
 
 [browser]
 gatherUsageStats = false
-serverAddress = "0.0.0.0"
-
-[runner]
-fastReruns = true
-magicEnabled = false
-
-[logger]
-level = "info"
