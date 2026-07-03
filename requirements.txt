@@ -1,4 +1,5 @@
-# Full app dependencies (without streamlit - HF SDK provides it)
+# Full app dependencies for Hugging Face Spaces
+gradio>=4.0.0
 openai>=1.0.0
 requests>=2.31.0
 python-dotenv>=1.0.0
