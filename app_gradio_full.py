@@ -151,7 +151,7 @@ def render_product_cards(products, current_products_state):
     return product_components, gr.update(visible=True), products
 
 # Create Gradio Interface
-with gr.Blocks(css=custom_css, title="Kapi Shopping Agent") as demo:
+with gr.Blocks(title="Kapi Shopping Agent") as demo:
     # Hidden state to track cart and products
     cart_state = gr.State([])
     products_state = gr.State([])
@@ -342,7 +342,9 @@ with gr.Blocks(css=custom_css, title="Kapi Shopping Agent") as demo:
             text = response.get("text", "No response")
             products = response.get("products", [])
 
-            chat_history.append((message, text))
+            # Gradio 6.0 format: list of dicts with role and content
+            chat_history.append({"role": "user", "content": message})
+            chat_history.append({"role": "assistant", "content": text})
 
             # Update product display
             product_updates = update_product_display(products)
@@ -352,7 +354,8 @@ with gr.Blocks(css=custom_css, title="Kapi Shopping Agent") as demo:
 
         except Exception as e:
             error_msg = f"❌ **Error:** {str(e)}"
-            chat_history.append((message, error_msg))
+            chat_history.append({"role": "user", "content": message})
+            chat_history.append({"role": "assistant", "content": error_msg})
 
             # Hide products on error
             product_updates = update_product_display([])
@@ -404,7 +407,8 @@ with gr.Blocks(css=custom_css, title="Kapi Shopping Agent") as demo:
             return process_query(f"🎤 {transcribed}", chat_history, session_mem, cart)
         else:
             error = transcribed or "No speech detected"
-            chat_history.append(("🎤 Voice Input", error))
+            chat_history.append({"role": "user", "content": "🎤 Voice Input"})
+            chat_history.append({"role": "assistant", "content": error})
             product_updates = update_product_display([])
             return ["", chat_history, session_mem, [], gr.update(visible=False)] + product_updates
 
@@ -450,5 +454,6 @@ if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        share=False
+        share=False,
+        css=custom_css
     )
