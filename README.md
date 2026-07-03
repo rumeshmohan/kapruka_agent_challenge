@@ -3,8 +3,9 @@ title: Kapi Smart Shopping Agent
 emoji: 🛍️
 colorFrom: blue
 colorTo: purple
-sdk: streamlit
-app_file: app.py
+sdk: gradio
+sdk_version: "4.44.0"
+app_file: app_gradio.py
 pinned: false
 ---
 

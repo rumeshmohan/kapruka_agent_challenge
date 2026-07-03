@@ -152,3 +152,4 @@ watchdog==6.0.0
     # via streamlit
 websockets==16.0
     # via streamlit
+gradio>=4.0.0
