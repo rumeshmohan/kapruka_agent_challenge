@@ -8,7 +8,6 @@ sdk_version: "1.58.0"
 app_file: app.py
 pinned: false
 license: mit
-startup_duration_timeout: 120
 ---
 
 # 🛍️ Kapi - Kapruka Smart Agent
