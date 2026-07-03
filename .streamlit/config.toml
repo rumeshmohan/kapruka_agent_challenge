@@ -4,6 +4,13 @@ port = 7860
 headless = true
 enableCORS = false
 enableXsrfProtection = false
+baseUrlPath = ""
+enableStaticServing = true
 
 [browser]
 gatherUsageStats = false
+serverAddress = "0.0.0.0"
+serverPort = 7860
+
+[client]
+showErrorDetails = true
