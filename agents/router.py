@@ -3,15 +3,6 @@ import re
 from openai import OpenAI
 from utils.config import get_config, get_api_key
 
-config = get_config()
-PROVIDER = config.get("provider.default", "groq")
-MODEL = config.get_model(PROVIDER, "general")
-
-try:
-    api_key = "ollama-local" if PROVIDER == "ollama" else get_api_key(PROVIDER)
-except ValueError as e:
-    raise ValueError(f"Router agent error: {e}")
-
 BASE_URL_MAP = {
     "ollama":      "http://localhost:11434/v1",
     "openrouter":  "https://openrouter.ai/api/v1",
@@ -23,7 +14,27 @@ BASE_URL_MAP = {
     "anthropic":   "https://api.anthropic.com/v1",
 }
 
-client = OpenAI(api_key=api_key, base_url=BASE_URL_MAP.get(PROVIDER))
+# Initialize lazily to avoid crashing on import if API key not set
+_client = None
+_provider = None
+_model = None
+
+def _get_client():
+    """Lazy initialization of OpenAI client"""
+    global _client, _provider, _model
+    if _client is None:
+        config = get_config()
+        _provider = config.get("provider.default", "groq")
+        _model = config.get_model(_provider, "general")
+
+        try:
+            api_key = "ollama-local" if _provider == "ollama" else get_api_key(_provider)
+        except ValueError as e:
+            raise ValueError(f"Router agent error: {e}")
+
+        _client = OpenAI(api_key=api_key, base_url=BASE_URL_MAP.get(_provider))
+
+    return _client, _model
 
 ROUTER_PROMPT = """
 You are an expert intent router for Kapruka e-commerce.
@@ -56,8 +67,9 @@ def route_query(query: str) -> str:
         return "[CHITCHAT]"
 
     try:
+        client, model = _get_client()
         res = client.chat.completions.create(
-            model=MODEL,
+            model=model,
             messages=[
                 {"role": "system", "content": ROUTER_PROMPT},
                 {"role": "user", "content": query},

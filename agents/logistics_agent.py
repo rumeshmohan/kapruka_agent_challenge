@@ -3,15 +3,6 @@ from openai import OpenAI
 from utils.config import get_config, get_api_key
 from utils.mcp_client import execute_remote_tool
 
-config   = get_config()
-PROVIDER = config.get("provider.default", "groq")
-MODEL    = config.get_model(PROVIDER, "general")
-
-try:
-    api_key = "ollama-local" if PROVIDER == "ollama" else get_api_key(PROVIDER)
-except ValueError as e:
-    raise ValueError(f"Logistics agent error: {e}")
-
 BASE_URL_MAP = {
     "ollama":      "http://localhost:11434/v1",
     "openrouter":  "https://openrouter.ai/api/v1",
@@ -23,7 +14,21 @@ BASE_URL_MAP = {
     "anthropic":   "https://api.anthropic.com/v1",
 }
 
-client = OpenAI(api_key=api_key, base_url=BASE_URL_MAP.get(PROVIDER))
+_client = None
+_model = None
+
+def _get_client():
+    global _client, _model
+    if _client is None:
+        config = get_config()
+        provider = config.get("provider.default", "groq")
+        _model = config.get_model(provider, "general")
+        try:
+            api_key = "ollama-local" if provider == "ollama" else get_api_key(provider)
+        except ValueError as e:
+            raise ValueError(f"Logistics agent error: {e}")
+        _client = OpenAI(api_key=api_key, base_url=BASE_URL_MAP.get(provider))
+    return _client, _model
 
 SYSTEM_PROMPT = """
 You are the Kapruka Customer Service Agent handling Logistics and Delivery.
@@ -66,8 +71,9 @@ def handle_logistics_query(query: str, history: str = "") -> str:
     ]
 
     try:
+        client, model = _get_client()
         response = client.chat.completions.create(
-            model=MODEL,
+            model=model,
             messages=messages,
             tools=LOGISTICS_TOOLS,
             tool_choice="auto",
@@ -91,7 +97,7 @@ def handle_logistics_query(query: str, history: str = "") -> str:
                 })
 
             second_response = client.chat.completions.create(
-                model=MODEL,
+                model=model,
                 messages=messages,
                 temperature=0.3,
             )

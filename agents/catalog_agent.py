@@ -3,10 +3,6 @@ from openai import OpenAI
 from utils.config import get_config, get_api_key
 from utils.mcp_client import execute_remote_tool
 
-config = get_config()
-PROVIDER = config.get("provider.default", "gemini")
-MODEL = config.get_model(PROVIDER, "general")
-
 BASE_URL_MAP = {
     "ollama":      "http://localhost:11434/v1",
     "openrouter":  "https://openrouter.ai/api/v1",
@@ -15,10 +11,20 @@ BASE_URL_MAP = {
     "openai":      "https://api.openai.com/v1",
 }
 
-client = OpenAI(
-    api_key=get_api_key(PROVIDER),
-    base_url=BASE_URL_MAP.get(PROVIDER, "https://generativelanguage.googleapis.com/v1beta/openai/")
-)
+_client = None
+_model = None
+
+def _get_client():
+    global _client, _model
+    if _client is None:
+        config = get_config()
+        provider = config.get("provider.default", "gemini")
+        _model = config.get_model(provider, "general")
+        _client = OpenAI(
+            api_key=get_api_key(provider),
+            base_url=BASE_URL_MAP.get(provider, "https://generativelanguage.googleapis.com/v1beta/openai/")
+        )
+    return _client, _model
 
 SYSTEM_PROMPT = """
 You are an elite, proactive Kapruka Concierge Sales Specialist.
@@ -60,13 +66,14 @@ def handle_catalog_query(query: str, history: str = "") -> dict:
     combined_products = []
 
     try:
+        client, model = _get_client()
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Conversation History:\n{history}\n\nCurrent User Query: {query}"}
         ]
 
         response = client.chat.completions.create(
-            model=MODEL,
+            model=model,
             messages=messages,
             tools=TOOLS_SCHEMA,
             tool_choice="auto",
