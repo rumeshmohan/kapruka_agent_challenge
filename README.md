@@ -17,8 +17,9 @@ An intelligent shopping assistant powered by multi-agent AI system.
 - 🤖 Multi-agent system (Catalog, Preferences, Checkout, Logistics)
 - 🎤 Voice input support (සිංහල | தமிழ் | English)
 - 💬 Natural language chat in English, Tamil, Sinhala, Singlish, Tanglish
-- 🛒 Smart cart management
-- 📦 Order tracking
+- 🛒 Interactive shopping cart with live total calculator
+- 🎯 Dynamic product grid with "Add to Cart" buttons
+- 📦 Order tracking and preferences management
 
 ## Configuration
 
