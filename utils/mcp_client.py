@@ -2,7 +2,6 @@ import uuid
 import json
 import re
 import requests
-import streamlit as st
 from utils.config import get_config
 
 config = get_config()
@@ -18,9 +17,12 @@ IMAGE_HEADERS = {
     "Accept": "application/json, text/event-stream",
 }
 
+# Simple session cache (replaces Streamlit session_state)
+_mcp_session_cache = {}
+
 def get_mcp_session():
-    if "mcp_session_id" in st.session_state and st.session_state.mcp_session_id:
-        return st.session_state.mcp_session_id
+    if "mcp_session_id" in _mcp_session_cache and _mcp_session_cache["mcp_session_id"]:
+        return _mcp_session_cache["mcp_session_id"]
         
     init_payload = {
         "jsonrpc": "2.0",
@@ -37,8 +39,8 @@ def get_mcp_session():
         resp = requests.post(MCP_URL, json=init_payload, headers=IMAGE_HEADERS, timeout=15)
         resp.raise_for_status()
         session_id = resp.headers.get("Mcp-Session-Id") or resp.headers.get("mcp-session-id") or str(uuid.uuid4())
-        st.session_state.mcp_session_id = session_id
-        
+        _mcp_session_cache["mcp_session_id"] = session_id
+
         headers = dict(IMAGE_HEADERS)
         headers["Mcp-Session-Id"] = session_id
         notify_payload = {"jsonrpc": "2.0", "method": "notifications/initialized"}
@@ -46,9 +48,9 @@ def get_mcp_session():
     except Exception as e:
         print(f"🚨 MCP SESSION ERROR: {e}")
         session_id = str(uuid.uuid4())
-        st.session_state.mcp_session_id = session_id
-        
-    return st.session_state.mcp_session_id
+        _mcp_session_cache["mcp_session_id"] = session_id
+
+    return _mcp_session_cache["mcp_session_id"]
 
 def execute_remote_tool(tool_name: str, arguments: dict) -> list:
     session_id = get_mcp_session()
