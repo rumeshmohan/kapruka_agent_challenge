@@ -50,10 +50,7 @@ demo = gr.ChatInterface(
         "Show me chocolates",
         "I need a birthday gift for my mom",
         "Find flowers for delivery in Colombo"
-    ],
-    retry_btn=None,
-    undo_btn=None,
-    clear_btn="Clear Chat"
+    ]
 )
 
 if __name__ == "__main__":
