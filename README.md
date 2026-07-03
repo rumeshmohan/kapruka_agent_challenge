@@ -4,7 +4,6 @@ emoji: 🛍️
 colorFrom: blue
 colorTo: purple
 sdk: streamlit
-sdk_version: "1.32.0"
 app_file: app_simple.py
 pinned: false
 ---
