@@ -4,9 +4,9 @@ emoji: 🛍️
 colorFrom: blue
 colorTo: purple
 sdk: gradio
-sdk_version: "4.44.0"
 app_file: app_gradio.py
 pinned: false
+python_version: "3.11"
 ---
 
 # 🛍️ Kapi - Kapruka Smart Agent
