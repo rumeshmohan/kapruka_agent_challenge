@@ -15,13 +15,24 @@ An intelligent shopping assistant powered by multi-agent AI system.
 
 ## Features
 - 🤖 Multi-agent system (Catalog, Preferences, Checkout, Logistics)
-- 💬 Natural language chat in English, Tamil, Sinhala
+- 🎤 Voice input support (සිංහල | தமிழ் | English)
+- 💬 Natural language chat in English, Tamil, Sinhala, Singlish, Tanglish
 - 🛒 Smart cart management
 - 📦 Order tracking
 
 ## Configuration
 
-Add these secrets in your Hugging Face Space settings (at least one required):
-- `GROQ_API_KEY` - For Groq models
-- `GEMINI_API_KEY` - For Google Gemini
-- `OPENAI_API_KEY` - For OpenAI (optional)
+Add these secrets in your Hugging Face Space settings:
+
+### Required (at least one):
+- `GROQ_API_KEY` - Recommended! Supports both chat + voice transcription
+- `GEMINI_API_KEY` - For Google Gemini (chat only)
+
+### Optional:
+- `OPENAI_API_KEY` - Alternative for voice transcription
+
+## Voice Support
+The app now supports multilingual voice input using Whisper:
+- 🎤 Click the microphone icon
+- 🗣️ Speak in Sinhala, Tamil, English, or mixed languages
+- ✨ Auto-transcribes and processes your request
