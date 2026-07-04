@@ -88,11 +88,11 @@ const buildWallpaper = (strokeColor) => {
 };
 
 export default function App() {
-  // Greeting text is keyed by dialect, not auto-cycled.
+  // Greeting text is keyed by dialect, not auto-cycled. Warm, welcoming tone.
   const greetingByDialect = {
-    'en-US': "Hi! Tell me what gift you're looking for, or use the filters on the left.",
-    'si-LK': "ආයුබෝවන්! ඔබට අවශ්‍ය තෑග්ග කියන්න, නැත්නම් වම් පැත්තේ ෆිල්ටර් පාවිච්චි කරන්න.",
-    'ta-LK': "வணக்கம்! நீங்கள் தேடும் பரிசு என்ன என்று சொல்லுங்கள், அல்லது இடதுபுறம் உள்ள வடிகட்டிகளைப் பயன்படுத்துங்கள்."
+    'en-US': "Hey there! 👋 So glad you stopped by — I'm here to help you find a gift they'll truly love. Tell me a bit about who it's for, or use the filters on the left to get started.",
+    'si-LK': "ආයුබෝවන්! 👋 ඔබ මෙහි පැමිණීම ගැන සතුටුයි — ඔබට ගැලපෙන අලංකාර තෑග්ගක් සොයාගැනීමට මම උදව් කරන්නම්. එය කාටද කියල මට ටිකක් කියන්න, නැත්නම් වම් පැත්තේ ෆිල්ටර් පාවිච්චි කරන්න.",
+    'ta-LK': "வணக்கம்! 👋 நீங்கள் வந்ததில் மகிழ்ச்சி — அவர்கள் நேசிக்கும் ஒரு பரிசை கண்டுபிடிக்க நான் உதவுகிறேன். அது யாருக்கு என்று கொஞ்சம் சொல்லுங்கள், அல்லது இடதுபுறம் உள்ள வடிகட்டிகளைப் பயன்படுத்துங்கள்."
   };
   const getGreeting = (dialect) => greetingByDialect[dialect] || greetingByDialect['en-US'];
 
@@ -247,15 +247,27 @@ export default function App() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Result count (6-10 aligned items) is now enforced server-side via
+        // the agent pipeline's prompt instruction, so we just send the query.
         body: JSON.stringify({ query: finalQuery, session_id: sessionId, cart })
       });
       const data = await res.json();
 
-      let processedProds = data.products || [];
-      processedProds = processedProds.filter(p => {
+      const allProds = data.products || [];
+      const withinBudget = allProds.filter(p => {
         const pVal = parseFloat(String(p.price || 0).replace(/[^0-9.]/g, ''));
         return pVal <= maxBudget;
       });
+
+      // If the budget filter leaves us with fewer than 6 items but the backend
+      // actually returned more relevant matches, backfill with the next-closest
+      // (still relevance-ordered) items so the person sees at least 6 options.
+      let processedProds = withinBudget;
+      if (processedProds.length < 6 && allProds.length > processedProds.length) {
+        const withinIds = new Set(processedProds.map(p => p.id));
+        const backfill = allProds.filter(p => !withinIds.has(p.id));
+        processedProds = [...processedProds, ...backfill].slice(0, Math.max(6, processedProds.length));
+      }
 
       if (sortBy === 'Price: Low to High') {
         processedProds.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
@@ -271,17 +283,29 @@ export default function App() {
   };
 
   const addToCart = (item) => {
-    if (!cart.some(c => c.id === item.id)) {
-      setCart([...cart, item]);
+    setCart(prev => {
+      const existing = prev.find(c => c.id === item.id);
+      if (existing) {
+        return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c);
+      }
+      return [...prev, { ...item, qty: 1 }];
+    });
 
-      const id = Date.now();
-      const newNotification = { id, message: `🛒 Added "${item.name}" to cart!` };
-      setNotifications(prev => [...prev, newNotification]);
+    const id = Date.now();
+    const newNotification = { id, message: `🛒 Added "${item.name}" to cart!` };
+    setNotifications(prev => [...prev, newNotification]);
 
-      setTimeout(() => {
-        setNotifications(prev => prev.filter(n => n.id !== id));
-      }, 3000);
-    }
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 3000);
+  };
+
+  const updateQty = (itemId, delta) => {
+    setCart(prev => {
+      return prev
+        .map(c => c.id === itemId ? { ...c, qty: c.qty + delta } : c)
+        .filter(c => c.qty > 0);
+    });
   };
 
   const clearSearch = () => {
@@ -333,7 +357,7 @@ export default function App() {
     setCart([]);
   };
 
-  const cartSubtotal = cart.reduce((sum, item) => sum + parseFloat(item.price || 0), 0);
+  const cartSubtotal = cart.reduce((sum, item) => sum + parseFloat(item.price || 0) * (item.qty || 1), 0);
   const deliveryHandlingFee = cartSubtotal * 0.10;
   const cartGrandTotal = cartSubtotal + deliveryHandlingFee;
 
@@ -570,14 +594,42 @@ export default function App() {
             <span style={{ ...styles.sectionTitle, marginBottom: 0 }}>🧮 Your Cart</span>
           </div>
 
-          <div style={{ maxHeight: '90px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+          <div style={{ maxHeight: '140px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
             {cart.length === 0 ? <p style={{ fontSize: '11px', color: wa.textFaint, textAlign: 'center', margin: '6px 0' }}>No products inside basket.</p> :
               cart.map((c, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', backgroundColor: wa.fieldBg, padding: '6px', borderRadius: '4px', color: wa.pageText }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>{c.name}</span>
-                  <span style={{ color: wa.accent, fontWeight: 'bold' }}>Rs. {parseFloat(c.price || 0).toLocaleString()}</span>
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', backgroundColor: wa.fieldBg, padding: '6px 8px', borderRadius: '4px', color: wa.pageText, gap: '8px' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{c.name}</span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                    <button
+                      onClick={() => updateQty(c.id, -1)}
+                      style={{
+                        width: '18px', height: '18px', borderRadius: '4px', border: `1px solid ${wa.fieldBorder}`,
+                        background: 'transparent', color: wa.labelText, fontSize: '11px', fontWeight: 'bold',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0
+                      }}
+                    >
+                      −
+                    </button>
+                    <span style={{ minWidth: '14px', textAlign: 'center', fontWeight: 'bold' }}>{c.qty || 1}</span>
+                    <button
+                      onClick={() => updateQty(c.id, 1)}
+                      style={{
+                        width: '18px', height: '18px', borderRadius: '4px', border: `1px solid ${wa.fieldBorder}`,
+                        background: 'transparent', color: wa.labelText, fontSize: '11px', fontWeight: 'bold',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <span style={{ color: wa.accent, fontWeight: 'bold', flexShrink: 0, minWidth: '70px', textAlign: 'right' }}>
+                    Rs. {(parseFloat(c.price || 0) * (c.qty || 1)).toLocaleString()}
+                  </span>
                 </div>
               ))}
+
           </div>
 
           <div style={{ paddingTop: '10px', borderTop: `1px solid ${wa.cardBorder}` }}>

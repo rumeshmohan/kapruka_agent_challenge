@@ -1,6 +1,13 @@
 {
   "CUS_001": {
     "customer_name": "Guest",
-    "recipients": {}
+    "recipients": {
+      "unknown": {
+        "allergies": [],
+        "preferences": [
+          "brown teddy bear doll"
+        ]
+      }
+    }
   }
 }
