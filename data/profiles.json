@@ -1,20 +1,29 @@
 {
   "CUS_001": {
-    "customer_name": "Kamal",
+    "customer_name": "Guest",
     "recipients": {
       "unknown": {
         "allergies": [],
         "preferences": [
-          "ice cream",
-          "chocolate cake"
+          "cake",
+          "none",
+          "luxury hampers",
+          "chocolate cake",
+          "doll"
         ]
       },
-      "wife": {
+      "sister": {
         "allergies": [
-          "peanuts"
+          "gluten"
         ],
         "preferences": [
-          "chocolate box"
+          "chocolate cakes"
+        ]
+      },
+      "mother": {
+        "allergies": [],
+        "preferences": [
+          "anniversary cake"
         ]
       }
     }
