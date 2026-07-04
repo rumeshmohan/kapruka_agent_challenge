@@ -76,14 +76,14 @@ async def chat_with_agent(payload: QueryRequest):
     if session_id not in session_memories:
         session_memories[session_id] = SessionBuffer(max_pairs=5)
         
-    # --- PROMPT INJECTION CONSTRAINT FOR PRECISE LINK HANDLING & RESULT EXPANSION ---
+    # --- PROMPT INJECTION CONSTRAINT FOR PRECISE LINK HANDLING ---
     structured_instruction_wrapper = (
         f"{payload.query}\n\n"
-        "[SYSTEM CONSTRAINT: Return at least 6 to 10 contextually aligned gift products using tool pipelines. "
-        "Do NOT under any circumstances output raw markdown or text links e.g., [Name](URL) inside your "
-        "conversational response. Refer to products by name only. Do NOT print out raw JSON or text lists "
-        "of products at the end of your message text. The React UI automatically displays dedicated interactive "
-        "catalog cards for items populated in the products array payload. Direct the user to look at the cards instead.]"
+        "[SYSTEM CONSTRAINT: Do NOT under any circumstances output raw markdown or text links "
+        "e.g., [Name](URL) inside your conversational response. Refer to products by name only. "
+        "Do NOT print out raw JSON or text lists of products at the end of your message text. "
+        "The React UI automatically displays dedicated interactive catalog cards with functioning links "
+        "for items populated in the products array payload. Direct the user to look at the cards instead.]"
     )
 
     try:
