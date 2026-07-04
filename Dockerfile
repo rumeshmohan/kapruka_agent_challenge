@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 # Ensure server engine runtime requirements are ready
-RUN pip install --no-cache-dir fastapi uvicorn staticfiles
+RUN pip install --no-cache-dir fastapi uvicorn
 
 # Transfer codebase structure elements
 COPY . .
