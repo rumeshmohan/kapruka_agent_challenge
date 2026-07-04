@@ -52,6 +52,24 @@ def get_profile():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/profile/reset")
+def reset_profile_json():
+    """Physically resets profiles.json to the baseline initial stage."""
+    try:
+        baseline_snapshot = {
+            "CUS_001": {
+                "customer_name": "Guest",
+                "recipients": {}
+            }
+        }
+        PROFILES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(PROFILES_FILE, "w", encoding="utf-8") as f:
+            json.dump(baseline_snapshot, f, indent=2)
+        return baseline_snapshot["CUS_001"]
+    except Exception as e:
+        logger.error(f"Failed to clear user vault file: {e}")
+        raise HTTPException(status_code=500, detail=f"Database wipe failure: {str(e)}")
+
 @app.post("/api/chat")
 async def chat_with_agent(payload: QueryRequest):
     session_id = payload.session_id

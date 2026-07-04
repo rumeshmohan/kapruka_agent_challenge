@@ -88,11 +88,6 @@ const buildWallpaper = (strokeColor) => {
 };
 
 export default function App() {
-  // Key used to remember (across app restarts) that the person manually
-  // reset their profile back to Guest, so we don't silently re-fetch and
-  // overwrite it with their old saved profile on the next load.
-  const PROFILE_RESET_KEY = 'kapi_profile_reset';
-
   // Greeting text is keyed by dialect, not auto-cycled.
   const greetingByDialect = {
     'en-US': "Hi! Tell me what gift you're looking for, or use the filters on the left.",
@@ -154,21 +149,10 @@ export default function App() {
       const res = await fetch('/api/profile');
       const data = await res.json();
       setProfile(data);
-      // A real profile came through (e.g. from an active chat), so the
-      // earlier manual "reset to Guest" no longer applies.
-      localStorage.removeItem(PROFILE_RESET_KEY);
     } catch (e) { console.error("Profile sync failure", e); }
   };
 
-  // Only auto-load the saved profile on startup if the user hasn't
-  // explicitly reset it to Guest — otherwise a restart would silently
-  // bring back the old profile right after they cleared it.
-  useEffect(() => {
-    const wasManuallyReset = localStorage.getItem(PROFILE_RESET_KEY) === 'true';
-    if (!wasManuallyReset) {
-      fetchProfile();
-    }
-  }, []);
+  useEffect(() => { fetchProfile(); }, []);
 
   useEffect(() => {
     const bg = chatTheme === 'dark' ? '#0b141a' : '#e5ddd5';
@@ -309,9 +293,17 @@ export default function App() {
 
   // Profile-only reset: rolls the sidebar profile back to Guest defaults.
   // Does not touch the cart, search filters, or chat stream.
-  const handleProfileReset = () => {
-    setProfile({ customer_name: 'Guest', recipients: {} });
-    localStorage.setItem(PROFILE_RESET_KEY, 'true');
+  const handleProfileReset = async () => {
+    try {
+      const res = await fetch('/api/profile/reset', { method: 'POST' });
+      const data = await res.json();
+      setProfile(data);
+    } catch (e) {
+      console.error("Profile reset failure", e);
+      // Fall back to a local-only reset if the backend call fails, so the
+      // UI still reflects the intent even if the persisted copy didn't update.
+      setProfile({ customer_name: 'Guest', recipients: {} });
+    }
 
     const id = Date.now();
     setNotifications(prev => [...prev, { id, message: "👤 Profile reset to Guest!" }]);

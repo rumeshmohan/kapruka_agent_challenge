@@ -1,31 +1,6 @@
 {
   "CUS_001": {
     "customer_name": "Guest",
-    "recipients": {
-      "unknown": {
-        "allergies": [],
-        "preferences": [
-          "cake",
-          "none",
-          "luxury hampers",
-          "chocolate cake",
-          "doll"
-        ]
-      },
-      "sister": {
-        "allergies": [
-          "gluten"
-        ],
-        "preferences": [
-          "chocolate cakes"
-        ]
-      },
-      "mother": {
-        "allergies": [],
-        "preferences": [
-          "anniversary cake"
-        ]
-      }
-    }
+    "recipients": {}
   }
 }
