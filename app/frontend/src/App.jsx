@@ -1,4 +1,29 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate } from 'react-router-dom';
+import { OrderTrackingCard, PackageIcon, CheckCircleIcon } from './OrderTrackingCard.jsx';
+import PaymentPage from './PaymentPage.jsx';
+import TrackPage from './TrackPage.jsx';
+
+// Subtle chat wallpaper: a tiled pattern of gift boxes & shopping bags,
+// intuitive for a gifting assistant, colored per theme so it reads
+// clearly on both light and dark backgrounds without being distracting.
+const buildWallpaper = (strokeColor) => {
+  const svg = `
+    <svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'>
+      <g fill='none' stroke='${strokeColor}' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'>
+        <path d='M14 34h16l1.6 22h-19.2z'/>
+        <path d='M17.5 34v-3.2a4.5 4.5 0 0 1 9 0V34'/>
+        <rect x='64' y='18' width='18' height='15' rx='1.5'/>
+        <path d='M64 24h18M73 18v15'/>
+        <path d='M27 76a9 9 0 1 0 0.1 0z'/>
+        <path d='M22 71l10 10M32 71l-10 10'/>
+        <rect x='78' y='70' width='20' height='16' rx='1.5'/>
+        <path d='M78 76.5h20M88 70v16'/>
+        <path d='M88 70l3-5h-6z'/>
+      </g>
+    </svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg.replace(/\s+/g, ' '))}`;
+};
 
 // Online shopping agent icon: shopping bag with a green "online" dot,
 // so the header clearly reads as a live shopping assistant.
@@ -66,28 +91,10 @@ const RefreshIcon = ({ size = 16, color = '#fff' }) => (
   </svg>
 );
 
-// Subtle chat wallpaper: a tiled pattern of gift boxes & shopping bags,
-// intuitive for a gifting assistant, colored per theme so it reads
-// clearly on both light and dark backgrounds without being distracting.
-const buildWallpaper = (strokeColor) => {
-  const svg = `
-    <svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'>
-      <g fill='none' stroke='${strokeColor}' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'>
-        <path d='M14 34h16l1.6 22h-19.2z'/>
-        <path d='M17.5 34v-3.2a4.5 4.5 0 0 1 9 0V34'/>
-        <rect x='64' y='18' width='18' height='15' rx='1.5'/>
-        <path d='M64 24h18M73 18v15'/>
-        <path d='M27 76a9 9 0 1 0 0.1 0z'/>
-        <path d='M22 71l10 10M32 71l-10 10'/>
-        <rect x='78' y='70' width='20' height='16' rx='1.5'/>
-        <path d='M78 76.5h20M88 70v16'/>
-        <path d='M88 70l3-5h-6z'/>
-      </g>
-    </svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg.replace(/\s+/g, ' '))}`;
-};
 
-export default function App() {
+function ChatPage() {
+  const navigate = useNavigate();
+
   // Greeting text is keyed by dialect, not auto-cycled. Warm, welcoming,
   // distinctly Sri Lankan tone — like a friendly neighborhood shop assistant.
   const greetingByDialect = {
@@ -108,6 +115,7 @@ export default function App() {
   const [profile, setProfile] = useState({ customer_name: 'Guest', recipients: {} });
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('🎁 Hunting down the perfect gift for you...');
   const [notifications, setNotifications] = useState([]);
 
   const [keyword, setKeyword] = useState('');
@@ -155,6 +163,9 @@ export default function App() {
   }, [selectedDialect]);
 
   const sessionId = "session_user_hf";
+
+  // Demo test order number provided for the Kapruka Agent Challenge tracking flow.
+  const TEST_ORDER_NUMBER = 'VPAY827982BA';
 
   const fetchProfile = async () => {
     try {
@@ -254,6 +265,18 @@ export default function App() {
 
     setMessages(prev => [...prev, { role: 'user', content: finalQuery }]);
     setInput('');
+
+    // Vary the wait-time message by intent so it doesn't always say
+    // "hunting down the perfect gift" for things like order tracking.
+    if (/vpay\d+[a-zA-Z0-9]*/i.test(finalQuery)) {
+      setLoadingLabel('📦 Checking your order status...');
+    } else if (/track|delivery|deliver|shipped|shipping/i.test(finalQuery)) {
+      setLoadingLabel('🚚 Looking up delivery details...');
+    } else if (/cart|checkout|payment|pay now/i.test(finalQuery)) {
+      setLoadingLabel('🧾 Working on your order...');
+    } else {
+      setLoadingLabel('🎁 Hunting down the perfect gift for you...');
+    }
     setLoading(true);
 
     try {
@@ -276,13 +299,30 @@ export default function App() {
         processedProds.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
       }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data.text, products: processedProds }]);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: data.text,
+        products: processedProds,
+        orderStatus: data.order_status || null
+      }]);
       fetchProfile();
+
+      // Checkout completed server-side: hand off to a dedicated full-page
+      // payment step instead of leaving the raw link buried in the chat.
+      if (data.checkout_data && data.checkout_data.checkout_url) {
+        navigate('/payment', { state: { checkoutData: data.checkout_data } });
+      }
     } catch (e) {
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Server connection timed out.' }]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Quick action: fires off a canned "track my order" query using the
+  // demo test order number, so the tracking flow can be triggered in one tap.
+  const handleTrackDemoOrder = () => {
+    handleSendMessage(`Where is my order ${TEST_ORDER_NUMBER}?`);
   };
 
   const addToCart = (item, qty = 1) => {
@@ -358,10 +398,26 @@ export default function App() {
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
-    const id = Date.now();
-    setNotifications(prev => [...prev, { id, message: `✅ Order placed successfully!` }]);
-    setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 3500);
-    setCart([]);
+    // Demo flow: build a dummy order summary from the cart locally (no
+    // backend call) and go straight to the payment page. Pay Now there
+    // simulates success and hands off to the existing track-order page.
+    const itemsTotal = cart.reduce(
+      (sum, item) => sum + (parseFloat(item.price) || 0) * (item.quantity || 1),
+      0
+    );
+    const dummyCheckoutData = {
+      checkout_url: null, // no real gateway in this demo flow
+      order_ref: TEST_ORDER_NUMBER,
+      summary: {
+        items_total: itemsTotal,
+        delivery_fee: 0,
+        addons_total: 0,
+        grand_total: itemsTotal,
+        currency: 'LKR',
+      },
+      expires_at: null,
+    };
+    navigate('/payment', { state: { checkoutData: dummyCheckoutData } });
   };
 
   const cartSubtotal = cart.reduce((sum, item) => sum + parseFloat(item.price || 0) * (item.qty || 1), 0);
@@ -499,7 +555,8 @@ export default function App() {
       color: active ? '#111b21' : wa.headerText,
       transition: 'all 0.2s'
     }),
-    qtyStepperBtn: { width: '22px', height: '22px', borderRadius: '4px', border: `1px solid ${wa.fieldBorder}`, background: 'transparent', color: wa.labelText, fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }
+    qtyStepperBtn: { width: '22px', height: '22px', borderRadius: '4px', border: `1px solid ${wa.fieldBorder}`, background: 'transparent', color: wa.labelText, fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 },
+    trackOrderBtn: { display: 'flex', alignItems: 'center', gap: '6px', border: `1px solid ${wa.fieldBorder}`, background: 'transparent', color: wa.labelText, padding: '8px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }
   };
 
   return (
@@ -595,6 +652,17 @@ export default function App() {
               ✕ Clear
             </button>
           </div>
+        </div>
+
+        <div style={styles.card}>
+          <span style={styles.sectionTitle}>📦 Order Tracking</span>
+          <p style={{ fontSize: '11px', color: wa.textFaint, margin: '0 0 10px 0' }}>
+            Already checked out? Track your delivery status live.
+          </p>
+          <button onClick={handleTrackDemoOrder} style={styles.trackOrderBtn}>
+            <PackageIcon size={14} color={wa.accent} />
+            Track my order
+          </button>
         </div>
 
         <div style={{ ...styles.card, marginTop: 'auto' }}>
@@ -742,6 +810,8 @@ export default function App() {
                   <div style={{ whiteSpace: 'pre-line' }}>{msg.content}</div>
                 )}
 
+                {msg.orderStatus && <OrderTrackingCard data={msg.orderStatus} wa={wa} />}
+
                 {msg.products && msg.products.length > 0 && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', marginTop: '12px', width: '100%' }}>
                     {msg.products.map((prod, pIdx) => (
@@ -777,7 +847,7 @@ export default function App() {
               }}>
                 <ShoppingAgentIcon size={15} color="#fff" />
               </div>
-              <div style={{ fontSize: '12px', color: '#8696a0', fontStyle: 'italic', paddingLeft: '4px' }}>🎁 Hunting down the perfect gift for you...</div>
+              <div style={{ fontSize: '12px', color: '#8696a0', fontStyle: 'italic', paddingLeft: '4px' }}>{loadingLabel}</div>
             </div>
           )}
         </div>
@@ -826,5 +896,15 @@ export default function App() {
 
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<ChatPage />} />
+      <Route path="/payment" element={<PaymentPage />} />
+      <Route path="/track" element={<TrackPage />} />
+    </Routes>
   );
 }

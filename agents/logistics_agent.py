@@ -1,4 +1,6 @@
 import json
+import re
+import ast
 from openai import OpenAI
 from utils.config import get_config, get_api_key
 from utils.mcp_client import execute_remote_tool
@@ -39,8 +41,6 @@ RULES:
    - If they ask in Tanglish or pure Tamil, reply warmly in Tanglish.
    - If they ask in Singlish or pure Sinhala, reply warmly in Singlish/Sinhala.
    - Otherwise, default to English.
-4. If the user does not provide a city or address, politely ask them where they want the item delivered before calling the tool.
-5. Format prices nicely (e.g., Rs. 400).
 """
 
 LOGISTICS_TOOLS = [
@@ -63,7 +63,206 @@ LOGISTICS_TOOLS = [
     }
 ]
 
-def handle_logistics_query(query: str, history: str = "") -> str:
+
+# ------------------------------------------------------------------
+# Kapruka's order-tracking MCP tool returns a pre-formatted Markdown
+# report (table + delivery address + progress timeline), NOT JSON.
+# It's also mis-encoded on Kapruka's end: every em dash ("—") comes
+# through as a mangled "â" character (or similar junk bytes). This
+# parser is defensive about that: instead of matching the mangled
+# separator character literally, it locates the meaningful token
+# (a timestamp, a table key, etc.) and strips whatever non-alphanumeric
+# junk surrounds it, so it keeps working even if the mangling changes.
+# ------------------------------------------------------------------
+
+_HEADER_RE = re.compile(r'^##\s*Order\s*`([^`]+)`\s*(.+)$')
+_TABLE_ROW_RE = re.compile(r'^\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|$')
+_EVENT_RE = re.compile(
+    r'^-?\s*([A-Za-z]{3}\s+\d{1,2},\s*\d{4}\s+\d{1,2}:\d{2}\s*[AaPp][Mm])\s*(.*)$'
+)
+
+
+def _strip_junk_prefix(text: str) -> str:
+    """Strip leading separator junk (mangled dashes/encoding artifacts)."""
+    return re.sub(r'^[^A-Za-z0-9(]+', '', text or "").strip()
+
+
+def parse_tracking_markdown(md: str) -> dict:
+    """
+    Parses the Kapruka 'kapruka_track_order' Markdown report into the
+    structured shape the frontend's OrderTrackingCard expects.
+
+    Returns a dict with keys:
+        order_number, status, eta, total, payment_ref, ordered_date,
+        shipped_date, recipient_name, recipient_address, recipient_phone,
+        greeting, notes, events (list of {timestamp, description})
+
+    Falls back gracefully: any section that can't be found is left as
+    None / [] rather than raising, since Kapruka's report format may
+    vary slightly between orders (e.g. no "Shipped" row yet).
+    """
+    if not md or not isinstance(md, str):
+        return None
+
+    lines = [l.rstrip() for l in md.strip().splitlines()]
+    result = {
+        "order_number": None,
+        "status": None,
+        "eta": None,
+        "total": None,
+        "payment_ref": None,
+        "ordered_date": None,
+        "shipped_date": None,
+        "recipient_name": None,
+        "recipient_address": None,
+        "recipient_phone": None,
+        "greeting": None,
+        "notes": None,
+        "events": [],
+    }
+
+    section = None  # None | "delivering" | "progress"
+    delivering_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        header_match = _HEADER_RE.match(stripped)
+        if header_match:
+            result["order_number"] = header_match.group(1).strip()
+            result["status"] = _strip_junk_prefix(header_match.group(2))
+            continue
+
+        if stripped.startswith("**Delivering to**"):
+            section = "delivering"
+            continue
+        if stripped.startswith("**Greeting:**"):
+            section = None
+            result["greeting"] = stripped.split("**Greeting:**", 1)[1].strip()
+            continue
+        if stripped.startswith("**Notes:**"):
+            section = None
+            result["notes"] = stripped.split("**Notes:**", 1)[1].strip()
+            continue
+        if stripped.startswith("**Progress**"):
+            section = "progress"
+            continue
+        if stripped.startswith("_"):
+            # Trailing italic footer note, e.g. "_live tracking available..._"
+            section = None
+            continue
+
+        table_match = _TABLE_ROW_RE.match(stripped)
+        if table_match and section is None:
+            key_raw = table_match.group(1).strip()
+            if set(key_raw) <= {"-"}:
+                # Markdown table separator row, e.g. "|---|---|"
+                continue
+            key = key_raw.lower()
+            val = table_match.group(2).strip()
+
+            if key == "total":
+                try:
+                    parsed_val = ast.literal_eval(val)
+                    if isinstance(parsed_val, dict):
+                        currency = parsed_val.get("currency", "").strip()
+                        amount = parsed_val.get("value", "")
+                        result["total"] = f"{currency} {amount}".strip()
+                    else:
+                        result["total"] = val
+                except Exception:
+                    result["total"] = val
+            elif key == "payment":
+                result["payment_ref"] = val
+            elif key == "ordered":
+                result["ordered_date"] = val
+            elif key == "shipped":
+                result["shipped_date"] = val
+            elif key == "delivery date":
+                result["eta"] = val
+            continue
+
+        if section == "delivering" and stripped.startswith("-"):
+            item = stripped.lstrip("-").strip()
+            # Drop stray HTML artifacts like a trailing "<BR"
+            item = re.split(r'<\s*BR', item, flags=re.IGNORECASE)[0].strip()
+            if item:
+                delivering_lines.append(item)
+            continue
+
+        if section == "progress" and stripped.startswith("-"):
+            event_match = _EVENT_RE.match(stripped)
+            if event_match:
+                timestamp, rest = event_match.group(1), event_match.group(2)
+                description = _strip_junk_prefix(rest)
+                if description:
+                    result["events"].append({
+                        "timestamp": timestamp,
+                        "description": description,
+                    })
+            continue
+
+    if delivering_lines:
+        result["recipient_name"] = delivering_lines[0]
+        phone_idx = None
+        for i, item in enumerate(delivering_lines[1:], start=1):
+            if re.search(r'\d{3}[\s-]?\d{6,7}', item):
+                phone_idx = i
+                break
+        if phone_idx is not None:
+            result["recipient_phone"] = delivering_lines[phone_idx]
+            address_parts = delivering_lines[1:phone_idx]
+        else:
+            address_parts = delivering_lines[1:]
+        if address_parts:
+            result["recipient_address"] = ", ".join(address_parts)
+
+    return result
+
+
+def handle_logistics_query(query: str, history: str = "") -> dict:
+    """
+    Returns a dict of the shape:
+    {
+        "text": "<conversational reply>",
+        "order_status": <structured tracking payload or None>
+    }
+    """
+    # 🌟 CASE-INSENSITIVE PRIORITY BYPASS: Extract the tracking reference
+    match = re.search(r'(vpay\d+[a-zA-Z0-9]*)', query, re.IGNORECASE)
+
+    if match:
+        order_number = match.group(1).upper()
+        try:
+            tool_result = execute_remote_tool("kapruka_track_order", {"order_number": order_number})
+
+            if tool_result:
+                # The MCP tool returns a Markdown report string (not JSON)
+                # for this endpoint. Parse it into structured data for the
+                # frontend's OrderTrackingCard. If it ever does come back
+                # as a dict/list already, pass it straight through.
+                if isinstance(tool_result, str):
+                    order_status = parse_tracking_markdown(tool_result) or {"raw": tool_result}
+                else:
+                    order_status = tool_result
+
+                return {
+                    "text": f"Ayubowan! 🌺 Here's the latest on order **{order_number}**:",
+                    "order_status": order_status
+                }
+            else:
+                return {
+                    "text": f"Ayubowan! 📦 I connected to the live tracking server, but order **{order_number}** has no delivery events logged yet. Please check back shortly.",
+                    "order_status": None
+                }
+        except Exception as e:
+            return {
+                "text": f"Ayubowan! ⚠️ Couldn't fetch tracking logs for order {order_number}. Error: {e}",
+                "order_status": None
+            }
+
     user_msg = f"History:\n{history}\n\nQuery: {query}"
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -101,9 +300,12 @@ def handle_logistics_query(query: str, history: str = "") -> str:
                 messages=messages,
                 temperature=0.3,
             )
-            return second_response.choices[0].message.content.strip()
+            return {"text": second_response.choices[0].message.content.strip(), "order_status": None}
         else:
-            return response_message.content.strip()
+            return {"text": response_message.content.strip(), "order_status": None}
 
     except Exception as e:
-        return f"I'm sorry, our live logistics system is currently unavailable. Error: {e}"
+        return {
+            "text": f"I'm sorry, our live logistics system is currently unavailable. Error: {e}",
+            "order_status": None
+        }

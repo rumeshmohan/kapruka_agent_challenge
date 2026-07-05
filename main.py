@@ -34,6 +34,8 @@ def run_agent_pipeline(query: str, session_memory: SessionBuffer, cart_items: li
         "text": "",
         "image_urls": [],
         "products": [],
+        "order_status": None,
+        "checkout_data": None,
         "intent": intent
     }
 
@@ -42,7 +44,14 @@ def run_agent_pipeline(query: str, session_memory: SessionBuffer, cart_items: li
         session_memory.add_message("assistant", output["text"])
         
     elif intent == "[LOGISTICS]":
-        output["text"] = handle_logistics_query(query, history=history_str)
+        result = handle_logistics_query(query, history=history_str)
+        if isinstance(result, dict):
+            output["text"] = result.get("text", "")
+            output["order_status"] = result.get("order_status")
+        else:
+            # Backward-compat safety net in case an older code path still
+            # returns a plain string somewhere.
+            output["text"] = result
         session_memory.add_message("assistant", output["text"])
         
     elif intent == "[PREFERENCE]":
@@ -51,7 +60,14 @@ def run_agent_pipeline(query: str, session_memory: SessionBuffer, cart_items: li
         session_memory.add_message("assistant", output["text"])
         
     elif intent == "[CHECKOUT]":
-        output["text"] = handle_checkout_query(query, cart_items=cart_items, history=history_str)
+        result = handle_checkout_query(query, cart_items=cart_items, history=history_str)
+        if isinstance(result, dict):
+            output["text"] = result.get("text", "")
+            output["checkout_data"] = result.get("checkout_data")
+        else:
+            # Backward-compat safety net in case an older code path still
+            # returns a plain string somewhere.
+            output["text"] = result
         session_memory.add_message("assistant", output["text"])
         
     else:  # [CATALOG]

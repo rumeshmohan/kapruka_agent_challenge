@@ -3,9 +3,10 @@ import sys
 import json
 import logging
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict
 
@@ -75,20 +76,17 @@ async def chat_with_agent(payload: QueryRequest):
     session_id = payload.session_id
     if session_id not in session_memories:
         session_memories[session_id] = SessionBuffer(max_pairs=5)
-        
-    # --- PROMPT INJECTION CONSTRAINT FOR PRECISE LINK HANDLING ---
-    structured_instruction_wrapper = (
-        f"{payload.query}\n\n"
-        "[SYSTEM CONSTRAINT: Do NOT under any circumstances output raw markdown or text links "
-        "e.g., [Name](URL) inside your conversational response. Refer to products by name only. "
-        "Do NOT print out raw JSON or text lists of products at the end of your message text. "
-        "The React UI automatically displays dedicated interactive catalog cards with functioning links "
-        "for items populated in the products array payload. Direct the user to look at the cards instead.]"
-    )
+
+    # NOTE: the "don't output raw markdown links" constraint used to be
+    # appended here globally, to every query regardless of intent. That
+    # broke the checkout agent, whose whole job is to hand the guest a
+    # working payment link formatted in Markdown. The constraint now lives
+    # in catalog_agent.py's own system prompt, scoped to where it's
+    # actually needed, so checkout and logistics are unaffected.
 
     try:
         response = run_agent_pipeline(
-            query=structured_instruction_wrapper,
+            query=payload.query,
             session_memory=session_memories[session_id],
             cart_items=payload.cart
         )
@@ -104,16 +102,55 @@ async def chat_with_agent(payload: QueryRequest):
 
         return {
             "text": clean_text,
-            "products": response.get("products", [])
+            "products": response.get("products", []),
+            "order_status": response.get("order_status"),
+            "checkout_data": response.get("checkout_data"),
         }
     except Exception as e:
         logger.error(f"Pipeline error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Standalone tracking lookup, so the /track page can look up an order
+# directly without going through the chat pipeline / LLM at all.
+@app.get("/api/track/{order_number}")
+def track_order_direct(order_number: str):
+    from utils.mcp_client import execute_remote_tool
+    from agents.logistics_agent import parse_tracking_markdown
+
+    try:
+        raw_result = execute_remote_tool("kapruka_track_order", {"order_number": order_number})
+        if isinstance(raw_result, str):
+            parsed = parse_tracking_markdown(raw_result)
+            return parsed or {"raw": raw_result}
+        return raw_result
+    except Exception as e:
+        logger.error(f"Direct tracking lookup error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Mount compiled static frontend production builds securely
 frontend_dist = Path("app/frontend/dist")
 if frontend_dist.exists():
-    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+    app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="frontend-assets")
+
+    @app.get("/{full_path:path}")
+    def spa_fallback(full_path: str, request: Request):
+        """
+        Serves the compiled React app for any non-API path, so client-side
+        routes like /payment and /track resolve correctly on a hard refresh
+        or a directly-typed URL, not just via in-app navigation.
+        """
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+
+        candidate = frontend_dist / full_path
+        if full_path and candidate.exists() and candidate.is_file():
+            return FileResponse(candidate)
+
+        index_file = frontend_dist / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+
+        return JSONResponse({"status": "Backend running. Build your frontend code to see the full UI."}, status_code=200)
 else:
     @app.get("/")
     def index_fallback():

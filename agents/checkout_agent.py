@@ -30,17 +30,36 @@ def _get_client():
         _client = OpenAI(api_key=api_key, base_url=BASE_URL_MAP.get(provider, "https://api.openai.com/v1"))
     return _client, _model
 
+# ------------------------------------------------------------------
+# Real kapruka_create_order schema (from inspect_checkout_schema.py):
+#   params.cart         -> list[{product_id, quantity, icing_text?}]
+#   params.recipient    -> {name, phone}
+#   params.delivery     -> {address, city, location_type?, date, instructions?}
+#   params.sender       -> {name, anonymous?}
+#   params.gift_message -> optional str
+#   params.currency     -> optional str (default LKR)
+# We build `cart` ourselves from cart_items, so the LLM only needs to
+# collect recipient / delivery / sender / gift_message from the user.
+# ------------------------------------------------------------------
+
 SYSTEM_PROMPT = """
 You are the Kapruka Checkout Concierge.
 Your goal is to finalize the customer's order.
 
+Before calling the checkout tool, you MUST collect ALL of the following from the conversation:
+- recipient name and phone number
+- delivery address (street/house), delivery city, and delivery date (YYYY-MM-DD, today or later)
+- sender's name (the person paying/sending the gift), and whether they want to stay anonymous
+- (optional) a gift message to print on the card
+- (optional) location type: house, apartment, office, or other (default house if not mentioned)
+
 RULES:
-1. Before calling the checkout tool, ensure you know the delivery city, recipient phone number, and if they want a gift message.
-2. MULTILINGUAL SUPPORT: Mirror the user's language. 
+1. If any REQUIRED field above is missing, ask the customer for it conversationally instead of guessing or calling the tool.
+2. MULTILINGUAL SUPPORT: Mirror the user's language.
    - If they converse in Tanglish or pure Tamil, reply warmly in Tanglish.
    - If they converse in Singlish or pure Sinhala, reply warmly in Singlish/Sinhala.
    - Otherwise, default to English.
-3. Once you have the details, ALWAYS use the 'kapruka_create_order' tool to generate the payment link.
+3. Once you have every required field, ALWAYS use the 'kapruka_create_order' tool to generate the payment link. Do not invent placeholder values.
 4. Format the payment link beautifully using Markdown so it stands out.
 5. Be incredibly warm and express excitement about their purchase.
 """
@@ -50,41 +69,83 @@ CHECKOUT_TOOLS = [
         "type": "function",
         "function": {
             "name": "kapruka_create_order",
-            "description": "Create a live guest checkout order on Kapruka and return a secure payment link.",
+            "description": "Create a live guest checkout order on Kapruka and return a secure payment link. The cart is filled in automatically from the customer's current cart — only provide recipient, delivery, sender, and optional gift_message/currency.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "item_ids": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of Kapruka product IDs in the cart."
+                    "recipient": {
+                        "type": "object",
+                        "description": "Who the order is delivered to.",
+                        "properties": {
+                            "name": {"type": "string", "description": "Recipient name shown on the order."},
+                            "phone": {"type": "string", "description": "Recipient phone, E.164 (+9477...) or local SL (077...) format."}
+                        },
+                        "required": ["name", "phone"]
                     },
-                    "delivery_city": {
-                        "type": "string",
-                        "description": "The destination city in Sri Lanka."
+                    "delivery": {
+                        "type": "object",
+                        "description": "Delivery details.",
+                        "properties": {
+                            "address": {"type": "string", "description": "Street address."},
+                            "city": {"type": "string", "description": "Delivery city in Sri Lanka."},
+                            "location_type": {
+                                "type": "string",
+                                "description": "One of: house, apartment, office, other. Default house.",
+                            },
+                            "date": {"type": "string", "description": "Delivery date, YYYY-MM-DD, today or future (Asia/Colombo)."},
+                            "instructions": {"type": "string", "description": "Optional free-form delivery instructions."}
+                        },
+                        "required": ["address", "city", "date"]
                     },
-                    "recipient_phone": {
-                        "type": "string",
-                        "description": "Phone number for the delivery driver."
+                    "sender": {
+                        "type": "object",
+                        "description": "Who is sending/paying for the gift.",
+                        "properties": {
+                            "name": {"type": "string", "description": "Sender name shown on the gift card."},
+                            "anonymous": {"type": "boolean", "description": "If true, gift card shows 'Anonymous' instead of the sender name. Default false."}
+                        },
+                        "required": ["name"]
                     },
                     "gift_message": {
                         "type": "string",
-                        "description": "Optional message to print on the physical gift card."
+                        "description": "Optional message to print on the physical gift card (max 300 chars)."
+                    },
+                    "currency": {
+                        "type": "string",
+                        "description": "Pricing currency: LKR (default), USD, GBP, AUD, CAD, EUR."
                     }
                 },
-                "required": ["item_ids", "delivery_city", "recipient_phone"]
+                "required": ["recipient", "delivery", "sender"]
             }
         }
     }
 ]
 
-def handle_checkout_query(query: str, cart_items: list, history: str = "") -> str:
+
+def _build_cart(cart_items: list) -> list:
+    """Builds the params.cart list the MCP tool actually expects."""
+    cart = []
+    for item in cart_items:
+        product_id = item.get("id") or item.get("product_id") or item.get("name")
+        if not product_id:
+            continue
+        entry = {
+            "product_id": product_id,
+            "quantity": item.get("quantity", 1),
+        }
+        if item.get("icing_text"):
+            entry["icing_text"] = item["icing_text"]
+        cart.append(entry)
+    return cart
+
+
+def handle_checkout_query(query: str, cart_items: list, history: str = "") -> dict:
     if not cart_items:
-        return "Your cart is currently empty! Let me know if you need help finding the perfect gift."
+        return {"text": "Your cart is currently empty! Let me know if you need help finding the perfect gift.", "checkout_data": None}
 
     cart_context = f"CURRENT CART STATUS: {json.dumps(cart_items)}\n"
     user_msg = f"{cart_context}History:\n{history}\n\nQuery: {query}"
-    
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user",   "content": user_msg},
@@ -99,7 +160,7 @@ def handle_checkout_query(query: str, cart_items: list, history: str = "") -> st
             tool_choice="auto",
             temperature=0.2,
         )
-        
+
         response_message = response.choices[0].message
         messages.append(response_message)
 
@@ -107,10 +168,23 @@ def handle_checkout_query(query: str, cart_items: list, history: str = "") -> st
             for tool_call in response_message.tool_calls:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
-                function_args["item_ids"] = [item.get("id", item.get("name")) for item in cart_items]
-                
+
+                # Always build cart ourselves from the real cart state —
+                # never trust/accept a cart the LLM might invent.
+                function_args["cart"] = _build_cart(cart_items)
+
+                # Force structured JSON instead of the tool's default Markdown
+                # report, so the frontend gets a reliable checkout_url /
+                # order_ref / summary to drive the payment page — no Markdown
+                # parsing needed for this one, unlike search/tracking.
+                function_args["response_format"] = "json"
+
                 tool_result = execute_remote_tool(function_name, function_args)
-                
+
+                checkout_data = None
+                if isinstance(tool_result, dict) and tool_result.get("checkout_url"):
+                    checkout_data = tool_result
+
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
@@ -123,9 +197,16 @@ def handle_checkout_query(query: str, cart_items: list, history: str = "") -> st
                 messages=messages,
                 temperature=0.4,
             )
-            return second_response.choices[0].message.content.strip()
+            text = (second_response.choices[0].message.content or "").strip()
+            if not text:
+                text = "Your order is ready! Tap below to complete payment. 🎁" if checkout_data else \
+                       "I'm sorry, I couldn't finalize the order. Please try again."
+            return {"text": text, "checkout_data": checkout_data}
         else:
-            return response_message.content.strip()
+            return {"text": (response_message.content or "").strip(), "checkout_data": None}
 
     except Exception:
-        return "I'm sorry, I encountered an error while setting up your secure checkout. Please try again in a moment."
+        return {
+            "text": "I'm sorry, I encountered an error while setting up your secure checkout. Please try again in a moment.",
+            "checkout_data": None,
+        }

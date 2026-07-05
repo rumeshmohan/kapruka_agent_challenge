@@ -14,26 +14,21 @@ BASE_URL_MAP = {
     "anthropic":   "https://api.anthropic.com/v1",
 }
 
-# Initialize lazily to avoid crashing on import if API key not set
 _client = None
 _provider = None
 _model = None
 
 def _get_client():
-    """Lazy initialization of OpenAI client"""
     global _client, _provider, _model
     if _client is None:
         config = get_config()
         _provider = config.get("provider.default", "groq")
         _model = config.get_model(_provider, "general")
-
         try:
             api_key = "ollama-local" if _provider == "ollama" else get_api_key(_provider)
         except ValueError as e:
             raise ValueError(f"Router agent error: {e}")
-
         _client = OpenAI(api_key=api_key, base_url=BASE_URL_MAP.get(_provider))
-
     return _client, _model
 
 ROUTER_PROMPT = """
@@ -42,7 +37,7 @@ The user may speak English, Singlish, or Tanglish.
 CRITICAL RULE: If a user message contains a greeting AND a product/shopping request, you MUST classify it as [CATALOG].
 Categorize into exactly one intent tag:
 [CATALOG]    - Searching for or wanting to see products.
-[LOGISTICS]  - Delivery areas, fees, shipping costs, or time frames.
+[LOGISTICS]  - Delivery areas, fees, shipping costs, time frames, or tracking an existing order status/order number.
 [PREFERENCE] - Saving customer preferences, likes, or allergies.
 [CHECKOUT]   - Ready to pay, finalize order, or proceed to payment links.
 [CHITCHAT]   - Pure greetings or generic text with NO product mentions.
@@ -52,7 +47,7 @@ Output ONLY the intent tag.
 
 CATALOG_KEYWORDS    = {"cake", "cakes", "chocolate", "chocolates", "flower", "flowers", "bouquet", "gift", "gifts", "toy", "toys", "teddy", "hamper", "hampers"}
 CHITCHAT_KEYWORDS   = {"hi", "hello", "hey", "thanks", "bye", "ayubowan", "vanakkam", "kohomada", "eppadi", "sthuthi", "nandri"}
-LOGISTICS_KEYWORDS  = {"delivery", "shipping", "kandy", "colombo", "cost", "fee", "mila", "kiyada", "dawasa", "ewanna", "evvalavu", "anuppu"}
+LOGISTICS_KEYWORDS  = {"delivery", "shipping", "kandy", "colombo", "cost", "fee", "mila", "kiyada", "dawasa", "ewanna", "evvalavu", "anuppu", "track", "order", "where", "vpay", "status", "koheda"}
 PREFERENCE_KEYWORDS = {"allergic", "allergy", "prefer", "likes", "dislikes", "favorite", "love", "loves", "hates", "kemathi", "akemathi"}
 CHECKOUT_KEYWORDS   = {"checkout", "pay", "purchase", "order", "salli", "gewanna"}
 
